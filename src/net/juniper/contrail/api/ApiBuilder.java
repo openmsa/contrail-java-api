@@ -5,15 +5,12 @@
 package net.juniper.contrail.api;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -21,110 +18,108 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 class ApiBuilder {
-    private static final Logger s_logger =
-            Logger.getLogger(ApiBuilder.class);
+	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
 
-    ApiBuilder() {
-    }
+	ApiBuilder() {
+	}
 
-    public String getTypename(Class<?> cls) {
-        String clsname = cls.getName();
-        int loc = clsname.lastIndexOf('.');
-        if (loc > 0) {
-            clsname = clsname.substring(loc + 1);
-        }
-        String typename = new String();
-        for (int i = 0; i < clsname.length(); i++) {
-            char ch = clsname.charAt(i);
-            if (Character.isUpperCase(ch)) {
-                if (i > 0) {
-                    typename += "-";
-                }
-                ch = Character.toLowerCase(ch);
-            }
-            typename += ch;
-        }
-        return typename;
-    }
+	public String getTypename(final Class<?> cls) {
+		String clsname = cls.getName();
+		final int loc = clsname.lastIndexOf('.');
+		if (loc > 0) {
+			clsname = clsname.substring(loc + 1);
+		}
+		String typename = new String();
+		for (int i = 0; i < clsname.length(); i++) {
+			char ch = clsname.charAt(i);
+			if (Character.isUpperCase(ch)) {
+				if (i > 0) {
+					typename += "-";
+				}
+				ch = Character.toLowerCase(ch);
+			}
+			typename += ch;
+		}
+		return typename;
+	}
 
-    public ApiObjectBase jsonToApiObject(String data, Class<? extends ApiObjectBase> cls) {
-        if (data == null) {
-            return null;
-        }
-        final String typename = getTypename(cls);
-        final JsonParser parser = new JsonParser();
-        final JsonObject js_obj = parser.parse(data).getAsJsonObject();
-        if (js_obj == null) {
-            s_logger.warn("Unable to parse response");
-            return null;
-        }
-        JsonElement element = null;
-        if (cls.getGenericSuperclass() == VRouterApiObjectBase.class) {
-            element = js_obj;
-        } else {
-            element = js_obj.get(typename);
-        }
-        if (element == null) {
-            s_logger.warn("Element " + typename + ": not found");
-            return null;
-        }
-        ApiObjectBase resp = ApiSerializer.deserialize(element.toString(), cls);
-        return resp;
-    }
+	public ApiObjectBase jsonToApiObject(final String data, final Class<? extends ApiObjectBase> cls) {
+		if (data == null) {
+			return null;
+		}
+		final String typename = getTypename(cls);
+		final JsonParser parser = new JsonParser();
+		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
+		if (js_obj == null) {
+			s_logger.warn("Unable to parse response");
+			return null;
+		}
+		JsonElement element = null;
+		if (cls.getGenericSuperclass() == VRouterApiObjectBase.class) {
+			element = js_obj;
+		} else {
+			element = js_obj.get(typename);
+		}
+		if (element == null) {
+			s_logger.warn("Element " + typename + ": not found");
+			return null;
+		}
+		return ApiSerializer.deserialize(element.toString(), cls);
+	}
 
-    // body: {"type": class, "fq_name": [parent..., name]}
-    public String buildFqnJsonString(Class<? extends ApiObjectBase> cls, List<String> name_list) {
-        Gson json = new Gson();
-        JsonObject js_dict = new JsonObject();
-        js_dict.add("type", json.toJsonTree(getTypename(cls)));
-        js_dict.add("fq_name", json.toJsonTree(name_list));
-        return   js_dict.toString();
-     }
+	// body: {"type": class, "fq_name": [parent..., name]}
+	public String buildFqnJsonString(final Class<? extends ApiObjectBase> cls, final List<String> name_list) {
+		final Gson json = new Gson();
+		final JsonObject js_dict = new JsonObject();
+		js_dict.add("type", json.toJsonTree(getTypename(cls)));
+		js_dict.add("fq_name", json.toJsonTree(name_list));
+		return js_dict.toString();
+	}
 
-     public String getUuid(String data) {
-        if (data == null) {
-            return null;
-        }
-        final JsonParser parser = new JsonParser();
-        final JsonObject js_obj= parser.parse(data).getAsJsonObject();
-        if (js_obj == null) {
-            s_logger.warn("Unable to parse response");
-            return null;
-        }
-        final JsonElement element = js_obj.get("uuid");
-        if (element == null) {
-            s_logger.warn("Element \"uuid\": not found");
-            return null;
-        }
-        return element.getAsString();
-    }
+	public String getUuid(final String data) {
+		if (data == null) {
+			return null;
+		}
+		final JsonParser parser = new JsonParser();
+		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
+		if (js_obj == null) {
+			s_logger.warn("Unable to parse response");
+			return null;
+		}
+		final JsonElement element = js_obj.get("uuid");
+		if (element == null) {
+			s_logger.warn("Element \"uuid\": not found");
+			return null;
+		}
+		return element.getAsString();
+	}
 
-    public List<? extends ApiObjectBase> jsonToApiObjects(String data, Class<? extends ApiObjectBase> cls, List<String> parent) throws IOException {
-        if (data == null) {
-            return null;
-        }
-        final String typename = getTypename(cls);
-        List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
-        final JsonParser parser = new JsonParser();
-        final JsonObject js_obj= parser.parse(data).getAsJsonObject();
-        if (js_obj == null) {
-            s_logger.warn("Unable to parse response");
-            return null;
-        }
-        final JsonArray array = js_obj.getAsJsonArray(typename + "s");
-        if (array == null) {
-            s_logger.warn("Element " + typename + ": not found");
-            return null;
-        }
-        Gson json = ApiSerializer.getDeserializer();
-        for (JsonElement element : array) {
-            ApiObjectBase obj = json.fromJson(element.toString(), cls);
-            if (obj == null) {
-                s_logger.warn("Unable to decode list element");
-                continue;
-            }
-            list.add(obj);
-        }
-        return list;
-    }
+	public List<? extends ApiObjectBase> jsonToApiObjects(final String data, final Class<? extends ApiObjectBase> cls, final List<String> parent) throws IOException {
+		if (data == null) {
+			return null;
+		}
+		final String typename = getTypename(cls);
+		final List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
+		final JsonParser parser = new JsonParser();
+		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
+		if (js_obj == null) {
+			s_logger.warn("Unable to parse response");
+			return null;
+		}
+		final JsonArray array = js_obj.getAsJsonArray(typename + "s");
+		if (array == null) {
+			s_logger.warn("Element " + typename + ": not found");
+			return null;
+		}
+		final Gson json = ApiSerializer.getDeserializer();
+		for (final JsonElement element : array) {
+			final ApiObjectBase obj = json.fromJson(element.toString(), cls);
+			if (obj == null) {
+				s_logger.warn("Unable to decode list element");
+				continue;
+			}
+			list.add(obj);
+		}
+		return list;
+	}
 }
