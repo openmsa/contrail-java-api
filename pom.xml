@@ -66,6 +66,11 @@
 			<artifactId>openstack4j-core</artifactId>
 			<version>3.11-SNAPSHOT</version>
 		</dependency>
+		<dependency>
+			<groupId>com.github.openstack4j.core.connectors</groupId>
+			<artifactId>openstack4j-httpclient</artifactId>
+			<version>3.11-SNAPSHOT</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -96,8 +101,8 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.6.2</version>
 				<configuration>
-					<source>1.6</source>
-					<target>1.6</target>
+					<source>1.8</source>
+					<target>1.8</target>
 				</configuration>
 			</plugin>
 			<plugin>

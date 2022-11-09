@@ -7,8 +7,15 @@ package net.juniper.contrail.api;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.Socket;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.net.ssl.SSLContext;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.ConnectionReuseStrategy;
@@ -17,14 +24,18 @@ import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.HttpVersion;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.DefaultConnectionReuseStrategy;
 import org.apache.http.impl.DefaultHttpClientConnection;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHttpEntityEnclosingRequest;
 import org.apache.http.params.HttpParams;
 import org.apache.http.params.HttpProtocolParams;
@@ -42,6 +53,8 @@ import org.apache.http.protocol.RequestDate;
 import org.apache.http.protocol.RequestExpectContinue;
 import org.apache.http.protocol.RequestTargetHost;
 import org.apache.http.protocol.RequestUserAgent;
+import org.apache.http.ssl.SSLContexts;
+import org.apache.http.ssl.TrustStrategy;
 import org.apache.http.util.EntityUtils;
 import org.openstack4j.api.OSClient.OSClientV2;
 import org.openstack4j.api.OSClient.OSClientV3;
@@ -52,13 +65,14 @@ import org.openstack4j.openstack.OSFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonObject;
 
 @SuppressWarnings("deprecation")
 class ApiConnectorImpl implements ApiConnector {
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final String FAILURE_MESSAGE = "Failure message: {}";
+
+	private static final Logger LOG = LoggerFactory.getLogger(ApiConnectorImpl.class);
 
 	private final String _api_hostname;
 	private final int _api_port;
@@ -160,12 +174,12 @@ class ApiConnectorImpl implements ApiConnector {
 
 	private void checkConnection() throws IOException {
 		if (!_connection.isOpen()) {
-			s_logger.info("http connection <" + _httphost.getHostName() + ", " +
-					_httphost.getPort() + "> does not exit");
+			LOG.info("http connection <{}, {}> does not exit", _httphost.getHostName(), _httphost.getPort());
+			// Socket is used by _connection.
+			@SuppressWarnings("resource")
 			final Socket socket = new Socket(_httphost.getHostName(), _httphost.getPort());
 			_connection.bind(socket, _params);
-			s_logger.info("http connection <" + _httphost.getHostName() + ", " +
-					_httphost.getPort() + "> established");
+			LOG.info("http connection <{}, {}> established", _httphost.getHostName(), _httphost.getPort());
 		}
 	}
 
@@ -196,11 +210,12 @@ class ApiConnectorImpl implements ApiConnector {
 				_authtoken = os.getAccess().getToken().getId();
 				return true;
 			} catch (final AuthenticationException authe) {
-				s_logger.warn("authenticate to keystone {} failed: {}", authe, _authurl);
+				LOG.warn("authenticate to keystone {} failed: {}", authe, _authurl);
 			}
 		} else if ("keystonev3".equals(_authtype)) {
 			try {
 				final V3 base = OSFactory.builderV3().endpoint(_authurl);
+				base.useNonStrictSSLClient(true);
 				if (_tenant != null) {
 					final Identifier domainIdentifier = Identifier.byName(_tenant);
 					base.credentials(_username, _password, domainIdentifier);
@@ -211,7 +226,7 @@ class ApiConnectorImpl implements ApiConnector {
 				_authtoken = os.getToken().getId();
 				return true;
 			} catch (final AuthenticationException authe) {
-				s_logger.warn("authenticate to keystone {} failed: {}", authe, _authurl);
+				LOG.warn("authenticate to keystone {} failed: {}", authe, _authurl);
 			}
 		}
 
@@ -220,56 +235,74 @@ class ApiConnectorImpl implements ApiConnector {
 	}
 
 	private HttpResponse execute(final String method, final String uri, final StringEntity entity) throws IOException {
-		return execute_doauth(method, uri, entity, MAX_RETRIES);
+		return executeDoauth(method, uri, entity, MAX_RETRIES);
 	}
 
-	private HttpResponse execute_doauth(final String method, final String uri, final StringEntity entity,
-			int retry_count) throws IOException {
-
+	private HttpResponse executeDoauth(final String method, final String uri, final StringEntity entity,
+			final int retryCount) throws IOException {
+		int rc = retryCount;
 		checkConnection();
-
+		if ((_authtoken == null) && (_authtype != null)) {
+			authenticate();
+		}
 		final BasicHttpEntityEnclosingRequest request = new BasicHttpEntityEnclosingRequest(method, uri);
 		if (entity != null) {
 			request.setEntity(entity);
-			s_logger.debug(">> Request: " + method + ", " + request.getRequestLine().getUri() +
-					", " + EntityUtils.toString(entity));
+			LOG.debug(">> Request: {}, {}, {}", method, request.getRequestLine().getUri(), EntityUtils.toString(entity));
 		} else {
-			s_logger.debug(">> Request: " + method + ", " + request.getRequestLine().getUri());
+			LOG.debug(">> Request: {}, {}", method, request.getRequestLine().getUri());
 		}
-		HttpResponse response = null;
 		request.setParams(_params);
 		if (_authtoken != null) {
 			request.setHeader("X-AUTH-TOKEN", _authtoken);
 		}
-		try {
-			_httpexecutor.preProcess(request, _httpproc, _httpcontext);
-			response = _httpexecutor.execute(request, _connection, _httpcontext);
+		final SSLContext sslContext = createSslContext();
+		CloseableHttpResponse response;
+		try (final CloseableHttpClient httpclient = HttpClients.custom()
+				.setSSLContext(sslContext)
+				.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+				.build()) {
+			response = httpclient.execute(_httphost, request);
 			response.setParams(_params);
 			_httpexecutor.postProcess(response, _httpproc, _httpcontext);
 		} catch (final Exception e) {
-			if (retry_count == 0) {
-				s_logger.error("<< Received exception from the Api server, max retries exhausted: " + e);
-				s_logger.error(Throwables.getStackTraceAsString(e));
+			if (rc == 0) {
+				LOG.error("<< Received exception from the Api server, max retries exhausted: ", e);
 				return null;
 			}
-			s_logger.info("<< Api server connection timed out, retrying " + retry_count + " more times");
-			return execute_doauth(method, uri, entity, --retry_count);
+			LOG.info("<< Api server connection timed out, retrying {} more times", rc);
+			return executeDoauth(method, uri, entity, --rc);
 		}
 
-		s_logger.debug("<< Response Status: " + response.getStatusLine());
+		LOG.debug("<< Response Status: {}", response.getStatusLine());
 		if (((response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED)
-				&& (retry_count > 0)) && authenticate()) {
+				&& (rc > 0)) && authenticate()) {
 			getResponseData(response);
 			checkResponseKeepAliveStatus(response);
-			s_logger.error("<< Received \"unauthorized response from the Api server, retrying "
-					+ retry_count + " more times after authentication");
-			return execute_doauth(method, uri, entity, --retry_count);
+			LOG.error("<< Received \"unauthorized response from the Api server, retrying {} more times after authentication", rc);
+			return executeDoauth(method, uri, entity, --rc);
 		}
 
 		return response;
 	}
 
-	private String getResponseData(final HttpResponse response) {
+	private static SSLContext createSslContext() {
+		try {
+			return SSLContexts.custom().loadTrustMaterial(null,
+					new TrustStrategy() {
+						@Override
+						public boolean isTrusted(final X509Certificate[] chain, final String authType)
+								throws CertificateException {
+							return true;
+						}
+					})
+					.build();
+		} catch (KeyManagementException | NoSuchAlgorithmException | KeyStoreException e) {
+			throw new ContrailException(e);
+		}
+	}
+
+	private static String getResponseData(final HttpResponse response) {
 		final HttpEntity entity = response.getEntity();
 		if (entity == null) {
 			return null;
@@ -279,13 +312,13 @@ class ApiConnectorImpl implements ApiConnector {
 			data = EntityUtils.toString(entity);
 			EntityUtils.consumeQuietly(entity);
 		} catch (final Exception ex) {
-			s_logger.warn("Unable to read http response", ex);
+			LOG.warn("Unable to read http response", ex);
 			return null;
 		}
 		return data;
 	}
 
-	private void updateObject(final ApiObjectBase obj, final ApiObjectBase resp) {
+	private static void updateObject(final ApiObjectBase obj, final ApiObjectBase resp) {
 		Class<?> cls = obj.getClass();
 
 		// getDeclaredFields doesn't return fields from parent class (ApiObjectBase)
@@ -296,34 +329,34 @@ class ApiConnectorImpl implements ApiConnector {
 		} while (cls != Object.class);
 	}
 
-	private void updateFields(final ApiObjectBase obj, final ApiObjectBase resp, final Class<?> cls) {
+	private static void updateFields(final ApiObjectBase obj, final ApiObjectBase resp, final Class<?> cls) {
 		for (final Field f : cls.getDeclaredFields()) {
 			f.setAccessible(true);
 			final Object nv;
 			try {
 				nv = f.get(resp);
 			} catch (final Exception ex) {
-				s_logger.warn("Unable to read new value for " + f.getName() + ": " + ex.getMessage());
+				LOG.warn("Unable to read new value for {}: {}", f.getName(), ex.getMessage());
 				continue;
 			}
 			final Object value;
 			try {
 				value = f.get(obj);
 			} catch (final Exception ex) {
-				s_logger.warn("Unable to read current value of " + f.getName() + ": " + ex.getMessage());
+				LOG.warn("Unable to read current value for {}: {}", f.getName(), ex.getMessage());
 				continue;
 			}
 			if ((value == null) && (nv != null)) {
 				try {
 					f.set(obj, nv);
 				} catch (final Exception ex) {
-					s_logger.warn("Unable to set " + f.getName() + ": " + ex.getMessage());
+					LOG.warn("Unable to set {}: {}", f.getName(), ex.getMessage());
 				}
 			}
 		}
 	}
 
-	private Status noResponseStatus() {
+	private static Status noResponseStatus() {
 		return Status.failure("No response from API server.");
 	}
 
@@ -351,7 +384,7 @@ class ApiConnectorImpl implements ApiConnector {
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
 			final String reason = response.getStatusLine().getReasonPhrase();
-			s_logger.warn("<< Response:" + reason);
+			LOG.warn("<< Response: {}", reason);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
 		}
@@ -361,7 +394,7 @@ class ApiConnectorImpl implements ApiConnector {
 		return Status.success();
 	}
 
-	private String buildDraftActionJson(final String action, final String scopeUuid) {
+	private static String buildDraftActionJson(final String action, final String scopeUuid) {
 		final JsonObject jsDict = new JsonObject();
 		jsDict.addProperty("scope_uuid", scopeUuid);
 		jsDict.addProperty("action", action);
@@ -392,9 +425,9 @@ class ApiConnectorImpl implements ApiConnector {
 				&& (status != HttpStatus.SC_ACCEPTED)) {
 
 			final String reason = response.getStatusLine().getReasonPhrase();
-			s_logger.error("create api request failed: " + reason);
+			LOG.error("create api request failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
-				s_logger.error("Failure message: " + getResponseData(response));
+				LOG.error(FAILURE_MESSAGE, getResponseData(response));
 			}
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
@@ -403,7 +436,7 @@ class ApiConnectorImpl implements ApiConnector {
 		final ApiObjectBase resp = _apiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
 		if (resp == null) {
 			final String reason = "Unable to decode Create response";
-			s_logger.error(reason);
+			LOG.error(reason);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
 		}
@@ -413,11 +446,11 @@ class ApiConnectorImpl implements ApiConnector {
 			obj.setUuid(resp.getUuid());
 		} else if (!uuid.equals(resp.getUuid())
 				&& !(obj instanceof VRouterApiObjectBase)) {
-			s_logger.warn("Response contains unexpected uuid: " + resp.getUuid());
+			LOG.warn("Response contains unexpected uuid: {}", resp.getUuid());
 			checkResponseKeepAliveStatus(response);
 			return Status.success();
 		}
-		s_logger.debug("Create " + typename + " uuid: " + obj.getUuid());
+		LOG.debug("Create {} uuid: {}", typename, obj.getUuid());
 		checkResponseKeepAliveStatus(response);
 		return Status.success();
 	}
@@ -437,7 +470,7 @@ class ApiConnectorImpl implements ApiConnector {
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
 			final String reason = response.getStatusLine().getReasonPhrase();
-			s_logger.warn("<< Response:" + reason);
+			LOG.warn("<< Response: {}", reason);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
 		}
@@ -460,18 +493,18 @@ class ApiConnectorImpl implements ApiConnector {
 		final int status = response.getStatusLine().getStatusCode();
 		if (status != HttpStatus.SC_OK) {
 			final String reason = response.getStatusLine().getReasonPhrase();
-			s_logger.warn("GET failed: " + reason);
+			LOG.warn("GET failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
-				s_logger.error("Failure message: " + getResponseData(response));
+				LOG.error(FAILURE_MESSAGE, getResponseData(response));
 			}
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
 		}
-		s_logger.debug("Response: " + response);
+		LOG.debug("Response: {}", response);
 		final ApiObjectBase resp = _apiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
 		if (resp == null) {
 			final String message = "Unable to decode GET response.";
-			s_logger.warn(message);
+			LOG.warn(message);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(message);
 		}
@@ -505,9 +538,9 @@ class ApiConnectorImpl implements ApiConnector {
 				&& (status != HttpStatus.SC_NO_CONTENT)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
 			final String reason = response.getStatusLine().getReasonPhrase();
-			s_logger.warn("Delete failed: " + reason);
+			LOG.warn("Delete failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
-				s_logger.error("Failure message: " + getResponseData(response));
+				LOG.error(FAILURE_MESSAGE, getResponseData(response));
 			}
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
@@ -553,7 +586,7 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 		final ApiObjectBase object = _apiBuilder.jsonToApiObject(getResponseData(response), cls);
 		if (object == null) {
-			s_logger.warn("Unable to decode find response");
+			LOG.warn("Unable to decode find response");
 		}
 
 		checkResponseKeepAliveStatus(response);
@@ -562,7 +595,7 @@ class ApiConnectorImpl implements ApiConnector {
 
 	@Override
 	public String findByName(final Class<? extends ApiObjectBase> cls, final ApiObjectBase parent, final String name) throws IOException {
-		final List<String> name_list = new ArrayList<String>();
+		final List<String> name_list = new ArrayList<>();
 		if (parent != null) {
 			name_list.addAll(parent.getQualifiedName());
 		} else {
@@ -570,7 +603,7 @@ class ApiConnectorImpl implements ApiConnector {
 				name_list.addAll(cls.newInstance().getDefaultParent());
 			} catch (final Exception ex) {
 				// Instantiation or IllegalAccess
-				s_logger.error("Failed to instantiate object of class " + cls.getName(), ex);
+				LOG.error("Failed to instantiate object of class {}", cls.getName(), ex);
 				return null;
 			}
 		}
@@ -601,11 +634,11 @@ class ApiConnectorImpl implements ApiConnector {
 			checkResponseKeepAliveStatus(response);
 			return null;
 		}
-		s_logger.debug("<< Response Data: " + data);
+		LOG.debug("<< Response Data: {}", data);
 
 		final String uuid = _apiBuilder.getUuid(data);
 		if (uuid == null) {
-			s_logger.warn("Unable to parse response");
+			LOG.warn("Unable to parse response");
 			checkResponseKeepAliveStatus(response);
 			return null;
 		}
@@ -623,7 +656,7 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 
 		if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			s_logger.warn("list failed with :" + response.getStatusLine().getReasonPhrase());
+			LOG.warn("list failed with : {}", response.getStatusLine().getReasonPhrase());
 			EntityUtils.consumeQuietly(response.getEntity());
 			checkResponseKeepAliveStatus(response);
 			return null;
@@ -636,7 +669,7 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 		final List<? extends ApiObjectBase> list = _apiBuilder.jsonToApiObjects(data, cls, parent);
 		if (list == null) {
-			s_logger.warn("Unable to parse/deserialize response: " + data);
+			LOG.warn("Unable to parse/deserialize response: {}", data);
 		}
 		checkResponseKeepAliveStatus(response);
 		return list;
@@ -645,11 +678,11 @@ class ApiConnectorImpl implements ApiConnector {
 	@Override
 	public <T extends ApiPropertyBase> List<? extends ApiObjectBase> getObjects(final Class<? extends ApiObjectBase> cls, final List<ObjectReference<T>> refList) throws IOException {
 
-		final List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
+		final List<ApiObjectBase> list = new ArrayList<>();
 		for (final ObjectReference<T> ref : refList) {
 			final ApiObjectBase obj = findById(cls, ref.getUuid());
 			if (obj == null) {
-				s_logger.warn("Unable to find element with uuid: " + ref.getUuid());
+				LOG.warn("Unable to find element with uuid: {}", ref.getUuid());
 				continue;
 			}
 			list.add(obj);
@@ -674,9 +707,9 @@ class ApiConnectorImpl implements ApiConnector {
 				&& (status != HttpStatus.SC_ACCEPTED)
 				&& (status != HttpStatus.SC_NO_CONTENT)) {
 			final String reason = response.getStatusLine().getReasonPhrase();
-			s_logger.error("sync request failed: " + reason);
+			LOG.error("sync request failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
-				s_logger.error("Failure message: " + getResponseData(response));
+				LOG.error(FAILURE_MESSAGE, getResponseData(response));
 			}
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
@@ -692,7 +725,7 @@ class ApiConnectorImpl implements ApiConnector {
 				_connection.close(); // close server connection
 			}
 		} catch (final IOException ex) {
-			s_logger.warn("Exception while closing server connection: " + ex.getMessage());
+			LOG.warn("Exception while closing server connection: {}", ex.getMessage());
 		}
 	}
 }
