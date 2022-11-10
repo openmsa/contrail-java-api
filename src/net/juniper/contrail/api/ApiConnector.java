@@ -10,7 +10,9 @@ import java.util.List;
 public interface ApiConnector {
 	ApiConnector credentials(String username, String password);
 
-	ApiConnector tenantName(String tenantName);
+	ApiConnector domainName(String tenantName);
+
+	ApiConnector tenantId(final String tenantId);
 
 	ApiConnector authToken(String token);
 

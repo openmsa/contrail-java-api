@@ -42,7 +42,7 @@ public class ApiConnectorMock implements ApiConnector {
 	private HashMap<String, List<HashMap<String, ApiObjectBase>>> _map;
 	private static final HashMap<Class<? extends ApiObjectBase>, Class<? extends ApiObjectBase>> _parentMap;
 	static {
-		final HashMap<Class<? extends ApiObjectBase>, Class<? extends ApiObjectBase>> parentMap = new HashMap<Class<? extends ApiObjectBase>, Class<? extends ApiObjectBase>>();
+		final HashMap<Class<? extends ApiObjectBase>, Class<? extends ApiObjectBase>> parentMap = new HashMap<>();
 		parentMap.put(Domain.class, Domain.class);
 		parentMap.put(Project.class, Domain.class);
 		parentMap.put(VirtualNetwork.class, Project.class);
@@ -112,7 +112,7 @@ public class ApiConnectorMock implements ApiConnector {
 	}
 
 	public void initConfig() {
-		_map = new HashMap<String, List<HashMap<String, ApiObjectBase>>>();
+		_map = new HashMap<>();
 		buildDefaultConfig();
 		buildDefaultObjectMap();
 	}
@@ -135,7 +135,7 @@ public class ApiConnectorMock implements ApiConnector {
 	}
 
 	void buildDefaultObjectMap() {
-		_defaultObjectMap = new HashMap<Class<? extends ApiObjectBase>, ApiObjectBase>();
+		_defaultObjectMap = new HashMap<>();
 		try {
 			_defaultObjectMap.put(Domain.class, findByFQN(Domain.class, "default-domain"));
 			_defaultObjectMap.put(Project.class, findByFQN(Project.class, "default-domain:default-project"));
@@ -185,7 +185,7 @@ public class ApiConnectorMock implements ApiConnector {
 		if (clsData != null) {
 			uuidMap = getUuidMap(clsData);
 			fqnMap = getFqnMap(clsData);
-			if (uuidMap.get(uuid) != null || fqnMap.get(fqn) != null) {
+			if ((uuidMap.get(uuid) != null) || (fqnMap.get(fqn) != null)) {
 				s_logger.warn("api object: " + obj.getName() + " already exists");
 				return false;
 			}
@@ -225,7 +225,6 @@ public class ApiConnectorMock implements ApiConnector {
 		return this;
 	}
 
-	@Override
 	public ApiConnector tenantName(final String tenant) {
 		return this;
 	}
@@ -259,8 +258,8 @@ public class ApiConnectorMock implements ApiConnector {
 		HashMap<String, ApiObjectBase> fqnMap = null;
 		if (clsData == null) {
 			clsData = new ArrayList<HashMap<String, ApiObjectBase>>();
-			uuidMap = new HashMap<String, ApiObjectBase>();
-			fqnMap = new HashMap<String, ApiObjectBase>();
+			uuidMap = new HashMap<>();
+			fqnMap = new HashMap<>();
 			clsData.add(uuidMap);
 			clsData.add(fqnMap);
 			setClassData(obj.getClass(), clsData);
@@ -268,7 +267,7 @@ public class ApiConnectorMock implements ApiConnector {
 			uuidMap = getUuidMap(clsData);
 			fqnMap = getFqnMap(clsData);
 		}
-		if (uuidMap.get(uuid) != null || fqnMap.get(fqn) != null) {
+		if ((uuidMap.get(uuid) != null) || (fqnMap.get(fqn) != null)) {
 			s_logger.warn("api object: " + obj.getName() + " already exists");
 			return Status.failure("Object already exists");
 		}
@@ -301,7 +300,7 @@ public class ApiConnectorMock implements ApiConnector {
 	}
 
 	ApiObjectBase getDefaultParent(final ApiObjectBase obj) {
-		if (obj.getClass() == Domain.class || obj.getName().equals("default-domain")) {
+		if ((obj.getClass() == Domain.class) || "default-domain".equals(obj.getName())) {
 			return null;
 		}
 		final Class<? extends ApiObjectBase> parentCls = _parentMap.get(obj.getClass());
@@ -352,7 +351,7 @@ public class ApiConnectorMock implements ApiConnector {
 			return Status.failure("No class data.");
 		}
 		final HashMap<String, ApiObjectBase> fqnMap = getFqnMap(clsData);
-		if (fqnMap == null || fqnMap.get(fqn) == null) {
+		if ((fqnMap == null) || (fqnMap.get(fqn) == null)) {
 			return Status.failure("No qualified name.");
 		}
 		obj = fqnMap.get(fqn);
@@ -368,7 +367,7 @@ public class ApiConnectorMock implements ApiConnector {
 		}
 		final String uuid = obj.getUuid();
 		final String fqn = getFqnString(obj.getQualifiedName());
-		if (fqn == null || uuid == null) {
+		if ((fqn == null) || (uuid == null)) {
 			s_logger.debug("can not delete - no uuid/fqn");
 			return Status.failure("UUID or FQN not specified.");
 		}
@@ -396,7 +395,7 @@ public class ApiConnectorMock implements ApiConnector {
 		final HashMap<String, ApiObjectBase> fqnMap = getFqnMap(clsData);
 
 		final ApiObjectBase obj = uuidMap.get(uuid);
-		if (obj != null && isChildrenExists(obj)) {
+		if ((obj != null) && isChildrenExists(obj)) {
 			final String reason = "Cannot delete object having children.";
 			s_logger.warn(reason);
 			return Status.failure(reason);
@@ -448,7 +447,7 @@ public class ApiConnectorMock implements ApiConnector {
 	@Override
 	public String findByName(final Class<? extends ApiObjectBase> cls, final ApiObjectBase parent, final String name) throws IOException {
 		s_logger.debug("findByName(cls, parent, name) : " + _apiBuilder.getTypename(cls) + ", " + name);
-		final List<String> name_list = new ArrayList<String>();
+		final List<String> name_list = new ArrayList<>();
 		if (parent != null) {
 			name_list.addAll(parent.getQualifiedName());
 		} else {
@@ -497,10 +496,10 @@ public class ApiConnectorMock implements ApiConnector {
 			return null;
 		}
 		final HashMap<String, ApiObjectBase> fqnMap = getFqnMap(clsData);
-		final ArrayList<ApiObjectBase> arr = new ArrayList<ApiObjectBase>(fqnMap.values());
-		final List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
+		final ArrayList<ApiObjectBase> arr = new ArrayList<>(fqnMap.values());
+		final List<ApiObjectBase> list = new ArrayList<>();
 		for (final ApiObjectBase obj : arr) {
-			if (fqnParent != null && getFqnString(obj.getQualifiedName()).startsWith(fqnParent + ":")) {
+			if ((fqnParent != null) && getFqnString(obj.getQualifiedName()).startsWith(fqnParent + ":")) {
 			}
 			list.add(obj);
 		}
@@ -509,16 +508,14 @@ public class ApiConnectorMock implements ApiConnector {
 
 	private boolean isChildrenExists(final ApiObjectBase parent) {
 		final String fqnParent = getFqnString(parent.getQualifiedName());
-		final ArrayList<List<HashMap<String, ApiObjectBase>>> clsDataList = new ArrayList<List<HashMap<String, ApiObjectBase>>>(_map.values());
+		final ArrayList<List<HashMap<String, ApiObjectBase>>> clsDataList = new ArrayList<>(_map.values());
 		for (final List<HashMap<String, ApiObjectBase>> clsData : clsDataList) {
 			final HashMap<String, ApiObjectBase> fqnMap = getFqnMap(clsData);
-			final ArrayList<ApiObjectBase> arr = new ArrayList<ApiObjectBase>(fqnMap.values());
-			final List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
+			final ArrayList<ApiObjectBase> arr = new ArrayList<>(fqnMap.values());
+			final List<ApiObjectBase> list = new ArrayList<>();
 			for (final ApiObjectBase obj : arr) {
-				if (getFqnString(obj.getQualifiedName()).startsWith(fqnParent + ":")) {
-					if (obj.getParent() == parent) {
-						return true;
-					}
+				if (getFqnString(obj.getQualifiedName()).startsWith(fqnParent + ":") && (obj.getParent() == parent)) {
+					return true;
 				}
 			}
 		}
@@ -528,7 +525,7 @@ public class ApiConnectorMock implements ApiConnector {
 	@Override
 	public <T extends ApiPropertyBase> List<? extends ApiObjectBase> getObjects(final Class<? extends ApiObjectBase> cls, final List<ObjectReference<T>> refList) throws IOException {
 		s_logger.debug("getObjects(cls, refList): " + _apiBuilder.getTypename(cls));
-		final List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
+		final List<ApiObjectBase> list = new ArrayList<>();
 		for (final ObjectReference<T> ref : refList) {
 			final ApiObjectBase obj = findById(cls, ref.getUuid());
 			if (obj == null) {
@@ -576,7 +573,7 @@ public class ApiConnectorMock implements ApiConnector {
 				throw new IOException("Unable to read value for " + f.getName() + ": " + ex.getMessage());
 			}
 
-			if (nv == null || nv.isEmpty()) {
+			if ((nv == null) || nv.isEmpty()) {
 				continue;
 			}
 
@@ -594,7 +591,6 @@ public class ApiConnectorMock implements ApiConnector {
 				updateObjectVerify(refObj, obj, getRefname(obj.getClass()) + "_back_refs");
 			}
 		}
-		return;
 	}
 
 	private void updateRefs(final ApiObjectBase obj) throws IOException {
@@ -613,7 +609,7 @@ public class ApiConnectorMock implements ApiConnector {
 				continue;
 			}
 
-			if (nv == null || nv.isEmpty()) {
+			if ((nv == null) || nv.isEmpty()) {
 				s_logger.debug("no refs of type: " + f.getName());
 				continue;
 			}
@@ -634,7 +630,6 @@ public class ApiConnectorMock implements ApiConnector {
 				updateObject(refObj, obj, getRefname(obj.getClass()) + "_back_refs");
 			}
 		}
-		return;
 	}
 
 	private void updateField(final ObjectReference<ApiPropertyBase> obj, final String fieldName, final String value) {
@@ -675,7 +670,6 @@ public class ApiConnectorMock implements ApiConnector {
 			s_logger.warn("Unable to read new value for " + fRefs.getName() + ": " + ex.getMessage());
 			throw new IOException("Unable to read new value for " + fRefs.getName() + ": " + ex.getMessage());
 		}
-		return;
 	}
 
 	private void updateObject(final ApiObjectBase obj, final ApiObjectBase other, final String fieldName) throws IOException {
@@ -699,11 +693,11 @@ public class ApiConnectorMock implements ApiConnector {
 		}
 
 		if (nv == null) {
-			nv = new ArrayList<ObjectReference<ApiPropertyBase>>();
+			nv = new ArrayList<>();
 		}
 
 		final String href = "http://localhost:8082/" + _apiBuilder.getTypename(other.getClass()) + '/' + other.getUuid();
-		final ObjectReference<ApiPropertyBase> objRef = new ObjectReference<ApiPropertyBase>(other.getQualifiedName(), null, href, other.getUuid());
+		final ObjectReference<ApiPropertyBase> objRef = new ObjectReference<>(other.getQualifiedName(), null, href, other.getUuid());
 		nv.add(objRef);
 		try {
 			fRefs.set(obj, nv);
@@ -726,5 +720,17 @@ public class ApiConnectorMock implements ApiConnector {
 
 	@Override
 	public void dispose() {
+	}
+
+	@Override
+	public ApiConnector domainName(final String tenantName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public ApiConnector tenantId(final String tenantId) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 }

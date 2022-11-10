@@ -1,53 +1,54 @@
 package net.juniper.contrail.api;
 
 public abstract class Status {
-    private Status() {
-    }
+	private Status() {
+	}
 
-    public abstract boolean isSuccess();
-    public abstract void ifFailure(ErrorHandler handler);
+	public abstract boolean isSuccess();
 
-    private final static Status success = new Success();
+	public abstract void ifFailure(ErrorHandler handler);
 
-    public static Status success() {
-        return success;
-    }
+	private static final Status success = new Success();
 
-    public static Status failure(String message) {
-        return new Failure(message);
-    }
+	public static Status success() {
+		return success;
+	}
 
-    private static class Success extends Status {
-        @Override
-        public boolean isSuccess() {
-            return true;
-        }
+	public static Status failure(final String message) {
+		return new Failure(message);
+	}
 
-        @Override
-        public void ifFailure(ErrorHandler handler) {
-            // do nothing
-        }
-    }
+	private static class Success extends Status {
+		@Override
+		public boolean isSuccess() {
+			return true;
+		}
 
-    private static class Failure extends Status {
-        private final String message;
+		@Override
+		public void ifFailure(final ErrorHandler handler) {
+			// do nothing
+		}
+	}
 
-        private Failure(String message) {
-            this.message = message;
-        }
+	private static class Failure extends Status {
+		private final String message;
 
-        @Override
-        public boolean isSuccess() {
-            return false;
-        }
+		private Failure(final String message) {
+			this.message = message;
+		}
 
-        @Override
-        public void ifFailure(ErrorHandler handler) {
-            handler.handle(message);
-        }
-    }
+		@Override
+		public boolean isSuccess() {
+			return false;
+		}
 
-    public interface ErrorHandler {
-        void handle(String errorMessage);
-    }
+		@Override
+		public void ifFailure(final ErrorHandler handler) {
+			handler.handle(message);
+		}
+	}
+
+	public interface ErrorHandler {
+		void handle(String errorMessage);
+	}
 }

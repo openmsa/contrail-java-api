@@ -18,29 +18,29 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 class ApiBuilder {
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final Logger LOG = LoggerFactory.getLogger(ApiBuilder.class);
 
 	ApiBuilder() {
 	}
 
-	public String getTypename(final Class<?> cls) {
+	public static String getTypename(final Class<?> cls) {
 		String clsname = cls.getName();
 		final int loc = clsname.lastIndexOf('.');
 		if (loc > 0) {
 			clsname = clsname.substring(loc + 1);
 		}
-		String typename = new String();
+		final StringBuilder typename = new StringBuilder();
 		for (int i = 0; i < clsname.length(); i++) {
 			char ch = clsname.charAt(i);
 			if (Character.isUpperCase(ch)) {
 				if (i > 0) {
-					typename += "-";
+					typename.append("-");
 				}
 				ch = Character.toLowerCase(ch);
 			}
-			typename += ch;
+			typename.append(ch);
 		}
-		return typename;
+		return typename.toString();
 	}
 
 	public ApiObjectBase jsonToApiObject(final String data, final Class<? extends ApiObjectBase> cls) {
@@ -51,7 +51,7 @@ class ApiBuilder {
 		final JsonParser parser = new JsonParser();
 		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
 		if (js_obj == null) {
-			s_logger.warn("Unable to parse response");
+			LOG.warn("Unable to parse response");
 			return null;
 		}
 		JsonElement element = null;
@@ -61,7 +61,7 @@ class ApiBuilder {
 			element = js_obj.get(typename);
 		}
 		if (element == null) {
-			s_logger.warn("Element " + typename + ": not found");
+			LOG.warn("Element {}: not found", typename);
 			return null;
 		}
 		return ApiSerializer.deserialize(element.toString(), cls);
@@ -81,14 +81,14 @@ class ApiBuilder {
 			return null;
 		}
 		final JsonParser parser = new JsonParser();
-		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
-		if (js_obj == null) {
-			s_logger.warn("Unable to parse response");
+		final JsonObject jsObj = parser.parse(data).getAsJsonObject();
+		if (jsObj == null) {
+			LOG.warn("Unable to parse response");
 			return null;
 		}
-		final JsonElement element = js_obj.get("uuid");
+		final JsonElement element = jsObj.get("uuid");
 		if (element == null) {
-			s_logger.warn("Element \"uuid\": not found");
+			LOG.warn("Element \"uuid\": not found");
 			return null;
 		}
 		return element.getAsString();
@@ -99,23 +99,23 @@ class ApiBuilder {
 			return null;
 		}
 		final String typename = getTypename(cls);
-		final List<ApiObjectBase> list = new ArrayList<ApiObjectBase>();
+		final List<ApiObjectBase> list = new ArrayList<>();
 		final JsonParser parser = new JsonParser();
-		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
-		if (js_obj == null) {
-			s_logger.warn("Unable to parse response");
+		final JsonObject jsObj = parser.parse(data).getAsJsonObject();
+		if (jsObj == null) {
+			LOG.warn("Unable to parse response");
 			return null;
 		}
-		final JsonArray array = js_obj.getAsJsonArray(typename + "s");
+		final JsonArray array = jsObj.getAsJsonArray(typename + "s");
 		if (array == null) {
-			s_logger.warn("Element " + typename + ": not found");
+			LOG.warn("Element {}: not found", typename);
 			return null;
 		}
 		final Gson json = ApiSerializer.getDeserializer();
 		for (final JsonElement element : array) {
 			final ApiObjectBase obj = json.fromJson(element.toString(), cls);
 			if (obj == null) {
-				s_logger.warn("Unable to decode list element");
+				LOG.warn("Unable to decode list element");
 				continue;
 			}
 			list.add(obj);
