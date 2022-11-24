@@ -5,6 +5,7 @@ package net.juniper.contrail.api;
 
 import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,7 +51,7 @@ public class ContrailApiMockTest {
 		final int port = ApiTestCommon.findFreePort();
 		ApiTestCommon.launchContrailServer(port);
 		s_logger.debug("initDefaultConfig: test api server launched <localhost" + ", " + port + ">");
-		final ApiConnector api = ApiConnectorFactory.build("localhost", port);
+		final ApiConnector api = ApiConnectorFactory.build(URI.create("http://localhost:" + port));
 
 		final Class<? extends ApiObjectBase>[] vncClasses = new Class[] {
 				Domain.class,
@@ -65,12 +66,12 @@ public class ContrailApiMockTest {
 				Port.class
 		};
 
-		final HashMap<Class<? extends ApiObjectBase>, List<HashMap<String, ApiObjectBase>>> map = new HashMap<Class<? extends ApiObjectBase>, List<HashMap<String, ApiObjectBase>>>();
+		final HashMap<Class<? extends ApiObjectBase>, List<HashMap<String, ApiObjectBase>>> map = new HashMap<>();
 		for (final Class<? extends ApiObjectBase> cls : vncClasses) {
 			final List<? extends ApiObjectBase> vncList = api.list(cls, null);
-			final List<HashMap<String, ApiObjectBase>> objList = new ArrayList<HashMap<String, ApiObjectBase>>();
-			final HashMap<String, ApiObjectBase> uuidMap = new HashMap<String, ApiObjectBase>();
-			final HashMap<String, ApiObjectBase> fqnMap = new HashMap<String, ApiObjectBase>();
+			final List<HashMap<String, ApiObjectBase>> objList = new ArrayList<>();
+			final HashMap<String, ApiObjectBase> uuidMap = new HashMap<>();
+			final HashMap<String, ApiObjectBase> fqnMap = new HashMap<>();
 			objList.add(uuidMap);
 			objList.add(fqnMap);
 			for (final ApiObjectBase obj : vncList) {
@@ -85,7 +86,6 @@ public class ContrailApiMockTest {
 		final ObjectOutputStream objOut = new ObjectOutputStream(fout);
 		objOut.writeObject(map);
 		objOut.close();
-		return;
 	}
 
 	@After

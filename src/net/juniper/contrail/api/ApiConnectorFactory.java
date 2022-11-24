@@ -5,29 +5,30 @@
 package net.juniper.contrail.api;
 
 import java.lang.reflect.Constructor;
+import java.net.URI;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ApiConnectorFactory {
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorFactory.class);
 
-	static private ApiConnectorFactory _singleton;
-	private Class<? extends ApiConnector> _cls;
+	private static ApiConnectorFactory singleton;
+	private Class<? extends ApiConnector> cls;
 
 	private ApiConnectorFactory() {
-		_cls = ApiConnectorImpl.class;
+		cls = ApiConnectorImpl.class;
 	}
 
 	private Constructor<? extends ApiConnector> getConstructor() throws NoSuchMethodException {
-		return _cls.getConstructor(String.class, Integer.TYPE);
+		return cls.getConstructor(URI.class);
 	}
 
 	private static synchronized ApiConnectorFactory getInstance() {
-		if (_singleton == null) {
-			_singleton = new ApiConnectorFactory();
+		if (singleton == null) {
+			singleton = new ApiConnectorFactory();
 		}
-		return _singleton;
+		return singleton;
 	}
 
 	/**
@@ -37,11 +38,12 @@ public class ApiConnectorFactory {
 	 * @port api server port.
 	 * @return ApiConnector implementation.
 	 */
-	public static ApiConnector build(final String hostname, final int port) {
+
+	public static ApiConnector build(final URI url) {
 		final ApiConnectorFactory factory = getInstance();
 		try {
 			final Constructor<? extends ApiConnector> constructor = factory.getConstructor();
-			return constructor.newInstance(hostname, port);
+			return constructor.newInstance(url);
 		} catch (final Exception ex) {
 			s_logger.error("Unable to create object", ex);
 		}
@@ -50,6 +52,6 @@ public class ApiConnectorFactory {
 
 	public static void setImplementation(final Class<? extends ApiConnector> cls) {
 		final ApiConnectorFactory factory = getInstance();
-		factory._cls = cls;
+		factory.cls = cls;
 	}
 }

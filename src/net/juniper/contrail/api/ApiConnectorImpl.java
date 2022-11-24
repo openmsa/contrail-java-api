@@ -7,11 +7,10 @@ package net.juniper.contrail.api;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.Socket;
+import java.net.URI;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,6 +35,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.DefaultBHttpClientConnection;
 import org.apache.http.impl.DefaultConnectionReuseStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHttpEntityEnclosingRequest;
 import org.apache.http.params.HttpParams;
@@ -54,7 +54,6 @@ import org.apache.http.protocol.RequestDate;
 import org.apache.http.protocol.RequestTargetHost;
 import org.apache.http.protocol.RequestUserAgent;
 import org.apache.http.ssl.SSLContexts;
-import org.apache.http.ssl.TrustStrategy;
 import org.apache.http.util.EntityUtils;
 import org.openstack4j.api.OSClient.OSClientV2;
 import org.openstack4j.api.OSClient.OSClientV3;
@@ -62,6 +61,7 @@ import org.openstack4j.api.client.IOSClientBuilder.V3;
 import org.openstack4j.api.exceptions.AuthenticationException;
 import org.openstack4j.core.transport.Config;
 import org.openstack4j.model.common.Identifier;
+import org.openstack4j.model.identity.v3.Project;
 import org.openstack4j.openstack.OSFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,12 +99,19 @@ class ApiConnectorImpl implements ApiConnector {
 	public static final int MAX_RETRIES = 5;
 	public final int clientId = 2;
 
-	public ApiConnectorImpl(final String hostname, final int port) {
-		apiHostname = hostname;
-		apiPort = port;
+	private String projectName;
+
+	private String domainName;
+
+	private final boolean ssl;
+
+	public ApiConnectorImpl(final URI url) {
+		apiHostname = url.getHost();
+		apiPort = (-1 == url.getPort()) ? 8082 : url.getPort();
+		ssl = "https".equals(url.getScheme());
 		hasInputAuthtoken = true;
 		initHttpClient();
-		initHttpServerParams(hostname, port);
+		initHttpServerParams(apiHostname, apiPort);
 		apiBuilder = new ApiBuilder();
 	}
 
@@ -132,7 +139,7 @@ class ApiConnectorImpl implements ApiConnector {
 	}
 
 	private void initHttpServerParams(final String hostname, final int port) {
-		httpHost = new HttpHost(hostname, port, "https");
+		httpHost = new HttpHost(hostname, port, ssl ? "https" : "http");
 		httpContext.setAttribute(HttpCoreContext.HTTP_CONNECTION, connection);
 		httpContext.setAttribute(HttpCoreContext.HTTP_TARGET_HOST, httpHost);
 	}
@@ -233,12 +240,18 @@ class ApiConnectorImpl implements ApiConnector {
 				}
 				final OSClientV3 os = base.authenticate();
 				authToken = os.getToken().getId();
+				final Project proj = os.getToken().getProject();
+				projectName = proj.getName();
+				if ("default".equalsIgnoreCase(proj.getDomainId())) {
+					domainName = "default-domain";
+				} else {
+					domainName = proj.getDomain().getName();
+				}
 				return true;
 			} catch (final AuthenticationException authe) {
 				LOG.warn("authenticate to keystone {} failed: {}", authe, authUrl);
 			}
 		}
-
 		// authenticate type unknown
 		return false;
 	}
@@ -265,12 +278,8 @@ class ApiConnectorImpl implements ApiConnector {
 		if (authToken != null) {
 			request.setHeader("X-AUTH-TOKEN", authToken);
 		}
-		final SSLContext sslContext = createSslContext();
 		CloseableHttpResponse response;
-		try (final CloseableHttpClient httpclient = HttpClients.custom()
-				.setSSLContext(sslContext)
-				.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-				.build()) {
+		try (final CloseableHttpClient httpclient = createClient()) {
 			response = httpclient.execute(httpHost, request);
 			response.setParams(_params);
 			httpExecutor.postProcess(response, httpProc, httpContext);
@@ -295,16 +304,18 @@ class ApiConnectorImpl implements ApiConnector {
 		return response;
 	}
 
+	private static CloseableHttpClient createClient() {
+		final HttpClientBuilder cli = HttpClients.custom();
+		final SSLContext sslContext = createSslContext();
+		cli.setSSLContext(sslContext)
+				.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+		return cli.build();
+	}
+
 	private static SSLContext createSslContext() {
 		try {
 			return SSLContexts.custom().loadTrustMaterial(null,
-					new TrustStrategy() {
-						@Override
-						public boolean isTrusted(final X509Certificate[] chain, final String authType)
-								throws CertificateException {
-							return true;
-						}
-					})
+					(chain, authType) -> true)
 					.build();
 		} catch (KeyManagementException | NoSuchAlgorithmException | KeyStoreException e) {
 			throw new ContrailException(e);
@@ -412,15 +423,18 @@ class ApiConnectorImpl implements ApiConnector {
 
 	@Override
 	public synchronized Status create(final ApiObjectBase obj) throws IOException {
+		if ((authToken == null) && (authType != null)) {
+			authenticate();
+		}
 		final String typename = ApiBuilder.getTypename(obj.getClass());
-		final String jsdata = ApiSerializer.serializeObject(typename, obj);
+		final String jsdata = ApiSerializer.serializeObject(typename, obj, projectName, domainName);
 
 		HttpResponse response;
 		if (obj instanceof VRouterApiObjectBase) {
 			response = execute(HttpPost.METHOD_NAME, "/" + typename,
 					new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 		} else {
-			obj.updateQualifiedName();
+			obj.updateQualifiedName(projectName, domainName);
 			response = execute(HttpPost.METHOD_NAME, "/" + typename + "s",
 					new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 		}
@@ -435,11 +449,10 @@ class ApiConnectorImpl implements ApiConnector {
 
 			final String reason = response.getStatusLine().getReasonPhrase();
 			LOG.error("create api request failed: {}", reason);
-			if (status != HttpStatus.SC_NOT_FOUND) {
-				LOG.error(FAILURE_MESSAGE, getResponseData(response));
-			}
+			final String res = getResponseData(response);
+			LOG.error(FAILURE_MESSAGE, res);
 			checkResponseKeepAliveStatus(response);
-			return Status.failure(reason);
+			return Status.failure(reason + " => " + res);
 		}
 
 		final ApiObjectBase resp = apiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
@@ -466,8 +479,11 @@ class ApiConnectorImpl implements ApiConnector {
 
 	@Override
 	public synchronized Status update(final ApiObjectBase obj) throws IOException {
+		if ((authToken == null) && (authType != null)) {
+			authenticate();
+		}
 		final String typename = ApiBuilder.getTypename(obj.getClass());
-		final String jsdata = ApiSerializer.serializeObject(typename, obj);
+		final String jsdata = ApiSerializer.serializeObject(typename, obj, projectName, domainName);
 		final HttpResponse response = execute(HttpPut.METHOD_NAME, "/" + typename + '/' + obj.getUuid(),
 				new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 

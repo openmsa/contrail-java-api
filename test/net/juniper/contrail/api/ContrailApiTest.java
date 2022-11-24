@@ -3,6 +3,8 @@
  *   */
 package net.juniper.contrail.api;
 
+import java.net.URI;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,7 +25,7 @@ public class ContrailApiTest {
 		final int port = ApiTestCommon.findFreePort();
 		ApiTestCommon.launchContrailServer(port);
 		s_logger.debug("test api server launched <localhost" + ", " + port + ">");
-		_apiTest = new ApiTestCommon(ApiConnectorFactory.build("localhost", port));
+		_apiTest = new ApiTestCommon(ApiConnectorFactory.build(URI.create("http://localhost:" + port)));
 	}
 
 	@After
