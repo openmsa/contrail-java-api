@@ -5,6 +5,7 @@
 package net.juniper.contrail.api;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.net.Socket;
 import java.net.URI;
@@ -77,8 +78,6 @@ class ApiConnectorImpl implements ApiConnector {
 
 	private final String apiHostname;
 	private final int apiPort;
-	private final ApiBuilder apiBuilder;
-
 	private String _username;
 	private String _password;
 	private String tenantId;
@@ -112,7 +111,6 @@ class ApiConnectorImpl implements ApiConnector {
 		hasInputAuthtoken = true;
 		initHttpClient();
 		initHttpServerParams(apiHostname, apiPort);
-		apiBuilder = new ApiBuilder();
 	}
 
 	private void initHttpClient() {
@@ -187,12 +185,12 @@ class ApiConnectorImpl implements ApiConnector {
 
 	private void checkConnection() throws IOException {
 		if (!connection.isOpen()) {
-			LOG.info("http connection <{}, {}> does not exit", httpHost.getHostName(), httpHost.getPort());
+			LOG.trace("http connection <{}, {}> does not exit", httpHost.getHostName(), httpHost.getPort());
 			// Socket is used by _connection.
 			@SuppressWarnings("resource")
 			final Socket socket = new Socket(httpHost.getHostName(), httpHost.getPort());
 			connection.bind(socket);
-			LOG.info("http connection <{}, {}> established", httpHost.getHostName(), httpHost.getPort());
+			LOG.trace("http connection <{}, {}> established", httpHost.getHostName(), httpHost.getPort());
 		}
 	}
 
@@ -279,7 +277,9 @@ class ApiConnectorImpl implements ApiConnector {
 			request.setHeader("X-AUTH-TOKEN", authToken);
 		}
 		CloseableHttpResponse response;
-		try (final CloseableHttpClient httpclient = createClient()) {
+		try {
+			// Do not close it.
+			final CloseableHttpClient httpclient = createClient();
 			response = httpclient.execute(httpHost, request);
 			response.setParams(_params);
 			httpExecutor.postProcess(response, httpProc, httpContext);
@@ -289,7 +289,8 @@ class ApiConnectorImpl implements ApiConnector {
 				return null;
 			}
 			LOG.info("<< Api server connection timed out, retrying {} more times", rc);
-			return executeDoauth(method, uri, entity, --rc);
+			rc--;
+			return executeDoauth(method, uri, entity, rc);
 		}
 
 		LOG.debug("<< Response Status: {}", response.getStatusLine());
@@ -298,7 +299,8 @@ class ApiConnectorImpl implements ApiConnector {
 			getResponseData(response);
 			checkResponseKeepAliveStatus(response);
 			LOG.error("<< Received \"unauthorized response from the Api server, retrying {} more times after authentication", rc);
-			return executeDoauth(method, uri, entity, --rc);
+			rc--;
+			return executeDoauth(method, uri, entity, rc);
 		}
 
 		return response;
@@ -327,15 +329,12 @@ class ApiConnectorImpl implements ApiConnector {
 		if (entity == null) {
 			return null;
 		}
-		String data;
-		try {
-			data = EntityUtils.toString(entity);
-			EntityUtils.consumeQuietly(entity);
+		try (InputStream is = entity.getContent()) {
+			return new String(is.readAllBytes());
 		} catch (final Exception ex) {
 			LOG.warn("Unable to read http response", ex);
 			return null;
 		}
-		return data;
 	}
 
 	private static void updateObject(final ApiObjectBase obj, final ApiObjectBase resp) {
@@ -454,10 +453,10 @@ class ApiConnectorImpl implements ApiConnector {
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason + " => " + res);
 		}
-
-		final ApiObjectBase resp = apiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
+		LOG.info("Contrail status: {}", status);
+		final ApiObjectBase resp = ApiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
 		if (resp == null) {
-			final String reason = "Unable to decode Create response";
+			final String reason = "Unable to decode Create response (response is null for class: " + obj.getClass() + ")";
 			LOG.error(reason);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
@@ -526,7 +525,7 @@ class ApiConnectorImpl implements ApiConnector {
 			return Status.failure(reason);
 		}
 		LOG.debug("Response: {}", response);
-		final ApiObjectBase resp = apiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
+		final ApiObjectBase resp = ApiBuilder.jsonToApiObject(getResponseData(response), obj.getClass());
 		if (resp == null) {
 			final String message = "Unable to decode GET response.";
 			LOG.warn(message);
@@ -609,7 +608,7 @@ class ApiConnectorImpl implements ApiConnector {
 			checkResponseKeepAliveStatus(response);
 			return null;
 		}
-		final ApiObjectBase object = apiBuilder.jsonToApiObject(getResponseData(response), cls);
+		final ApiObjectBase object = ApiBuilder.jsonToApiObject(getResponseData(response), cls);
 		if (object == null) {
 			LOG.warn("Unable to decode find response");
 		}
@@ -640,7 +639,7 @@ class ApiConnectorImpl implements ApiConnector {
 	// POST http://hostname:port/fqname-to-id
 	// body: {"type": class, "fq_name": [parent..., name]}
 	public synchronized String findByName(final Class<? extends ApiObjectBase> cls, final List<String> name_list) throws IOException {
-		final String jsonStr = apiBuilder.buildFqnJsonString(cls, name_list);
+		final String jsonStr = ApiBuilder.buildFqnJsonString(cls, name_list);
 		final HttpResponse response = execute(HttpPost.METHOD_NAME, "/fqname-to-id",
 				new StringEntity(jsonStr, ContentType.APPLICATION_JSON));
 
@@ -661,7 +660,7 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 		LOG.debug("<< Response Data: {}", data);
 
-		final String uuid = apiBuilder.getUuid(data);
+		final String uuid = ApiBuilder.getUuid(data);
 		if (uuid == null) {
 			LOG.warn("Unable to parse response");
 			checkResponseKeepAliveStatus(response);
@@ -692,7 +691,7 @@ class ApiConnectorImpl implements ApiConnector {
 			checkResponseKeepAliveStatus(response);
 			return null;
 		}
-		final List<? extends ApiObjectBase> list = apiBuilder.jsonToApiObjects(data, cls, parent);
+		final List<? extends ApiObjectBase> list = ApiBuilder.jsonToApiObjects(data, cls, parent);
 		if (list == null) {
 			LOG.warn("Unable to parse/deserialize response: {}", data);
 		}
