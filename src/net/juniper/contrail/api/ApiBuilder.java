@@ -18,6 +18,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 class ApiBuilder {
+	private static final String UNABLE_TO_PARSE_RESPONSE = "Unable to parse response";
 	private static final Logger LOG = LoggerFactory.getLogger(ApiBuilder.class);
 
 	ApiBuilder() {
@@ -43,22 +44,22 @@ class ApiBuilder {
 		return typename.toString();
 	}
 
-	public ApiObjectBase jsonToApiObject(final String data, final Class<? extends ApiObjectBase> cls) {
+	public static ApiObjectBase jsonToApiObject(final String data, final Class<? extends ApiObjectBase> cls) {
 		if (data == null) {
+			LOG.info("Contrail response is null");
 			return null;
 		}
 		final String typename = getTypename(cls);
-		final JsonParser parser = new JsonParser();
-		final JsonObject js_obj = parser.parse(data).getAsJsonObject();
-		if (js_obj == null) {
-			LOG.warn("Unable to parse response");
+		final JsonObject jsObj = JsonParser.parseString(data).getAsJsonObject();
+		if (jsObj == null) {
+			LOG.warn(UNABLE_TO_PARSE_RESPONSE);
 			return null;
 		}
 		JsonElement element = null;
 		if (cls.getGenericSuperclass() == VRouterApiObjectBase.class) {
-			element = js_obj;
+			element = jsObj;
 		} else {
-			element = js_obj.get(typename);
+			element = jsObj.get(typename);
 		}
 		if (element == null) {
 			LOG.warn("Element {}: not found", typename);
@@ -68,22 +69,21 @@ class ApiBuilder {
 	}
 
 	// body: {"type": class, "fq_name": [parent..., name]}
-	public String buildFqnJsonString(final Class<? extends ApiObjectBase> cls, final List<String> name_list) {
+	public static String buildFqnJsonString(final Class<? extends ApiObjectBase> cls, final List<String> nameList) {
 		final Gson json = new Gson();
-		final JsonObject js_dict = new JsonObject();
-		js_dict.add("type", json.toJsonTree(getTypename(cls)));
-		js_dict.add("fq_name", json.toJsonTree(name_list));
-		return js_dict.toString();
+		final JsonObject jsDict = new JsonObject();
+		jsDict.add("type", json.toJsonTree(getTypename(cls)));
+		jsDict.add("fq_name", json.toJsonTree(nameList));
+		return jsDict.toString();
 	}
 
-	public String getUuid(final String data) {
+	public static String getUuid(final String data) {
 		if (data == null) {
 			return null;
 		}
-		final JsonParser parser = new JsonParser();
-		final JsonObject jsObj = parser.parse(data).getAsJsonObject();
+		final JsonObject jsObj = JsonParser.parseString(data).getAsJsonObject();
 		if (jsObj == null) {
-			LOG.warn("Unable to parse response");
+			LOG.warn(UNABLE_TO_PARSE_RESPONSE);
 			return null;
 		}
 		final JsonElement element = jsObj.get("uuid");
@@ -94,16 +94,15 @@ class ApiBuilder {
 		return element.getAsString();
 	}
 
-	public List<? extends ApiObjectBase> jsonToApiObjects(final String data, final Class<? extends ApiObjectBase> cls, final List<String> parent) throws IOException {
+	public static List<? extends ApiObjectBase> jsonToApiObjects(final String data, final Class<? extends ApiObjectBase> cls, final List<String> parent) throws IOException {
 		if (data == null) {
 			return null;
 		}
 		final String typename = getTypename(cls);
 		final List<ApiObjectBase> list = new ArrayList<>();
-		final JsonParser parser = new JsonParser();
-		final JsonObject jsObj = parser.parse(data).getAsJsonObject();
+		final JsonObject jsObj = JsonParser.parseString(data).getAsJsonObject();
 		if (jsObj == null) {
-			LOG.warn("Unable to parse response");
+			LOG.warn(UNABLE_TO_PARSE_RESPONSE);
 			return null;
 		}
 		final JsonArray array = jsObj.getAsJsonArray(typename + "s");
