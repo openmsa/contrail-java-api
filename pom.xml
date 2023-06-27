@@ -2,14 +2,14 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>net.juniper.contrail</groupId>
 	<artifactId>ubi-juniper-contrail-api</artifactId>
-	<version>3.1-SNAPSHOT</version>
+	<version>4.0.0-SNAPSHOT</version>
 	<packaging>jar</packaging>
 	<name>juniper-contrail-api</name>
 	<url>http://maven.apache.org</url>
 	<scm>
 		<developerConnection>scm:git:https://github.com/openmsa/contrail-java-api.git</developerConnection>
-	  <tag>HEAD</tag>
-  </scm>
+		<tag>HEAD</tag>
+	</scm>
 	<distributionManagement>
 		<repository>
 			<id>nexus-releases</id>
@@ -28,7 +28,7 @@
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
-			<version>31.1-jre</version>
+			<version>32.0.1-jre</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
@@ -82,23 +82,6 @@
 		<directory>target</directory>
 		<sourceDirectory>src</sourceDirectory>
 		<testSourceDirectory>test</testSourceDirectory>
-		<!-- 
-    <testResources>
-      <testResource>
-        <directory>test/resources</directory>
-      </testResource>
-    </testResources>
-     -->
-		<!--
-    <resources>
-      <resource>
-        <directory>test/resources</directory>
-        <includes>
-          <include>default_config</include>
-        </includes>
-      </resource>
-    </resources>
-    -->
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -142,25 +125,6 @@
 				</configuration>
 			</plugin>
 			-->
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>build-helper-maven-plugin</artifactId>
-				<version>1.4</version>
-				<executions>
-					<execution>
-						<id>add-wsdl-source</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>add-source</goal>
-						</goals>
-						<configuration>
-							<sources>
-								<source>src</source>
-							</sources>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
