@@ -29,7 +29,7 @@ import net.juniper.contrail.api.types.VirtualNetwork;
 
 public class ContrailApiMockTest {
 	public static ApiTestCommon _apiTest;
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final Logger s_logger = LoggerFactory.getLogger(ContrailApiMockTest.class);
 
 	public static final String defaultConfigFile = "test/resources/default_config";
 
@@ -50,7 +50,7 @@ public class ContrailApiMockTest {
 	public void initDefaultConfig() throws Exception {
 		final int port = ApiTestCommon.findFreePort();
 		ApiTestCommon.launchContrailServer(port);
-		s_logger.debug("initDefaultConfig: test api server launched <localhost" + ", " + port + ">");
+		s_logger.debug("initDefaultConfig: test api server launched <localhost, {}>", port);
 		final ApiConnector api = ApiConnectorFactory.build(URI.create("http://localhost:" + port));
 
 		final Class<? extends ApiObjectBase>[] vncClasses = new Class[] {

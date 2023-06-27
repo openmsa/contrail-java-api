@@ -35,7 +35,7 @@ import net.juniper.contrail.api.types.VnSubnetsType;
 
 public class ApiTestCommon {
 	public static ApiConnector _api;
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final Logger s_logger = LoggerFactory.getLogger(ApiTestCommon.class);
 
 	ApiTestCommon(final ApiConnector api) {
 		_api = api;
@@ -88,7 +88,7 @@ public class ApiTestCommon {
 		final String hostname = "localhost";
 		final int port = findFreePort();
 		launchContrailServer(port);
-		s_logger.debug("test api server launched <" + hostname + ", " + port + ">");
+		s_logger.debug("test api server launched <{}, {}>", hostname, port);
 	}
 
 	public void tearDown() throws Exception {
@@ -100,25 +100,23 @@ public class ApiTestCommon {
 		net1.setName("test-network");
 		net1.setUuid(uuid1);
 		try {
-			s_logger.info("create '<name=test-network, uuid=" +
-					uuid1 + ">' Virtual Network");
+			s_logger.info("create '<name=test-network, uuid={}>' Virtual Network", uuid1);
 			assertTrue(_api.create(net1).isSuccess());
 		} catch (final IOException ex) {
-			s_logger.warn("create test-network io exception " + ex.getMessage());
+			s_logger.warn("create test-network io exception {}", ex.getMessage());
 			fail(ex.getMessage());
 		} catch (final Exception ex) {
-			s_logger.warn("create test-network http exception " + ex.getMessage());
+			s_logger.warn("create test-network http exception {}", ex.getMessage());
 			fail(ex.getMessage());
 		}
 
 		final VirtualNetwork net2 = new VirtualNetwork();
 		net2.setName("srv-id-assign");
 		try {
-			s_logger.info("create '<name=srv-id-assign, uuid=empty" +
-					">' Virtual Network");
+			s_logger.info("create '<name=srv-id-assign, uuid=empty>' Virtual Network");
 			assertTrue(_api.create(net2).isSuccess());
 		} catch (final IOException ex) {
-			s_logger.warn("create srv-id-assign exception " + ex.getMessage());
+			s_logger.warn("create srv-id-assign exception {}", ex.getMessage());
 			fail(ex.getMessage());
 		}
 
@@ -148,11 +146,9 @@ public class ApiTestCommon {
 		}
 
 		try {
-			s_logger.info("delete '<name=test-network, uuid=" +
-					uuid1 + ">' Virtual Network");
+			s_logger.info("delete '<name=test-network, uuid={}>' Virtual Network", uuid1);
 			_api.delete(net1);
-			s_logger.info("delete '<name=srv-id-assign, uuid=" +
-					net2.getUuid() + ">' Virtual Network");
+			s_logger.info("delete '<name=srv-id-assign, uuid={}>' Virtual Network", net2.getUuid());
 			_api.delete(net2);
 		} catch (final IOException ex) {
 			fail(ex.getMessage());

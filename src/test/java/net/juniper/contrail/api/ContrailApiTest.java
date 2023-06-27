@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 
 public class ContrailApiTest {
 	public static ApiTestCommon _apiTest;
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final Logger s_logger = LoggerFactory.getLogger(ContrailApiTest.class);
 
 	@Before
 	public void setUp() throws Exception {
@@ -24,7 +24,7 @@ public class ContrailApiTest {
 
 		final int port = ApiTestCommon.findFreePort();
 		ApiTestCommon.launchContrailServer(port);
-		s_logger.debug("test api server launched <localhost" + ", " + port + ">");
+		s_logger.debug("test api server launched <localhost, {}>", port);
 		_apiTest = new ApiTestCommon(ApiConnectorFactory.build(URI.create("http://localhost:" + port)));
 	}
 

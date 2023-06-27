@@ -48,11 +48,6 @@
 			<version>4.5.14</version>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-to-slf4j</artifactId>
-			<version>2.20.0</version>
-		</dependency>
-		<dependency>
 			<groupId>com.github.openstack4j.core</groupId>
 			<artifactId>ubi-openstack4j-core</artifactId>
 			<version>3.11</version>
