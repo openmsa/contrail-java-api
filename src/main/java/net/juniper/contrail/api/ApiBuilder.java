@@ -4,7 +4,6 @@
 
 package net.juniper.contrail.api;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -94,7 +93,7 @@ class ApiBuilder {
 		return element.getAsString();
 	}
 
-	public static List<? extends ApiObjectBase> jsonToApiObjects(final String data, final Class<? extends ApiObjectBase> cls, final List<String> parent) throws IOException {
+	public static List<? extends ApiObjectBase> jsonToApiObjects(final String data, final Class<? extends ApiObjectBase> cls, final List<String> parent) {
 		if (data == null) {
 			return null;
 		}

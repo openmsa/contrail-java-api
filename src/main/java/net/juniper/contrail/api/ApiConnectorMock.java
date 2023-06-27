@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +36,7 @@ import net.juniper.contrail.api.types.VirtualMachineInterface;
 import net.juniper.contrail.api.types.VirtualNetwork;
 
 public class ApiConnectorMock implements ApiConnector {
-	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorImpl.class);
+	private static final Logger s_logger = LoggerFactory.getLogger(ApiConnectorMock.class);
 
 	private final ApiBuilder _apiBuilder;
 	private HashMap<String, List<HashMap<String, ApiObjectBase>>> _map;
@@ -54,16 +54,20 @@ public class ApiConnectorMock implements ApiConnector {
 		_parentMap = parentMap;
 	}
 
+	private static String randomMacAddress() {
+		final Random r = new Random();
+		return IntStream.range(0, 12)
+				.map(x -> r.nextInt(10))
+				.mapToObj(x -> String.valueOf((char) ('0' + x)))
+				.collect(Collectors.joining(":"));
+	}
+
 	private static void assignAutoProperty(final ApiObjectBase obj) {
 		if (obj.getClass() == VirtualMachineInterface.class) {
 			if (((VirtualMachineInterface) obj).getMacAddresses() != null) {
 				return;
 			}
-			String addr = RandomStringUtils.random(17, false, true);
-			final char[] charArray = addr.toCharArray();
-			charArray[2] = charArray[5] = charArray[5] = ':';
-			charArray[8] = charArray[11] = charArray[14] = ':';
-			addr = new String(charArray);
+			final String addr = randomMacAddress();
 
 			final MacAddressesType macs = new MacAddressesType();
 			macs.addMacAddress(addr);
@@ -87,7 +91,8 @@ public class ApiConnectorMock implements ApiConnector {
 			if (i == 0) {
 				ch = Character.toUpperCase(ch);
 			} else if (ch == '_') {
-				ch = clsname.charAt(++i);
+				i++;
+				ch = clsname.charAt(i);
 				ch = Character.toUpperCase(ch);
 			}
 			typename += ch;
@@ -169,7 +174,7 @@ public class ApiConnectorMock implements ApiConnector {
 	}
 
 	private String getFqnString(final List<String> name_list) {
-		return StringUtils.join(name_list, ':');
+		return name_list.stream().collect(Collectors.joining(":"));
 	}
 
 	private boolean validate(final ApiObjectBase obj) throws IOException {
@@ -465,7 +470,7 @@ public class ApiConnectorMock implements ApiConnector {
 	// POST http://hostname:port/fqname-to-id
 	// body: {"type": class, "fq_name": [parent..., name]}
 	public synchronized String findByName(final Class<? extends ApiObjectBase> cls, final List<String> name_list) throws IOException {
-		final String fqn = StringUtils.join(name_list, ':');
+		final String fqn = name_list.stream().collect(Collectors.joining(":"));
 		s_logger.debug("findByName(cls, name_list) : " + _apiBuilder.getTypename(cls) + ", " + fqn);
 		final List clsData = getClassData(cls);
 		if (clsData == null) {
@@ -485,7 +490,7 @@ public class ApiConnectorMock implements ApiConnector {
 	public synchronized List<? extends ApiObjectBase> list(final Class<? extends ApiObjectBase> cls, final List<String> parent) throws IOException {
 		String fqnParent = null;
 		if (parent != null) {
-			fqnParent = StringUtils.join(parent, ':');
+			fqnParent = parent.stream().collect(Collectors.joining(":"));
 			s_logger.debug("list(cls, parent_name_list) : " + _apiBuilder.getTypename(cls) + ", " + fqnParent);
 		} else {
 			s_logger.debug("list(cls, parent_name_list) : " + _apiBuilder.getTypename(cls) + ", null");
@@ -543,18 +548,18 @@ public class ApiConnectorMock implements ApiConnector {
 		if (loc > 0) {
 			clsname = clsname.substring(loc + 1);
 		}
-		String typename = new String();
+		final StringBuilder typename = new StringBuilder().append(new String());
 		for (int i = 0; i < clsname.length(); i++) {
 			char ch = clsname.charAt(i);
 			if (Character.isUpperCase(ch)) {
 				if (i > 0) {
-					typename += "_";
+					typename.append("_");
 				}
 				ch = Character.toLowerCase(ch);
 			}
-			typename += ch;
+			typename.append(ch);
 		}
-		return typename;
+		return typename.toString();
 	}
 
 	private void updateRefsVerify(final ApiObjectBase obj) throws IOException {
