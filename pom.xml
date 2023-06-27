@@ -6,6 +6,9 @@
 	<packaging>jar</packaging>
 	<name>juniper-contrail-api</name>
 	<url>http://maven.apache.org</url>
+	<scm>
+		<developerConnection>scm:git:https://github.com/openmsa/contrail-java-api.git</developerConnection>
+	</scm>
 	<distributionManagement>
 		<repository>
 			<id>nexus-releases</id>

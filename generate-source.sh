@@ -10,4 +10,4 @@ if [ $(echo "${DIR}" | grep build | grep -v contrail-builder) ];then
 SBTOP="${SBTOP}/.."
 fi
 mkdir -p ${TARGET}
-$SBTOP/src/contrail-api-client/generateds/generateDS.py -f -o ${TARGET} -g java-api $SBTOP/src/contrail-api-client/schema/vnc_cfg.xsd
+#$SBTOP/src/contrail-api-client/generateds/generateDS.py -f -o ${TARGET} -g java-api $SBTOP/src/contrail-api-client/schema/vnc_cfg.xsd
