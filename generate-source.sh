@@ -11,3 +11,4 @@ SBTOP="${SBTOP}/.."
 fi
 mkdir -p ${TARGET}
 #$SBTOP/src/contrail-api-client/generateds/generateDS.py -f -o ${TARGET} -g java-api $SBTOP/src/contrail-api-client/schema/vnc_cfg.xsd
+echo ../tf-api-client/generateds/generateDS.py -f -o src/net/juniper/contrail/api/types/ -g java-api ../tf-api-client/schema/vnc_cfg.xsd
