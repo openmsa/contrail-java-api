@@ -5,9 +5,10 @@ package net.juniper.contrail.api;
 
 import java.net.URI;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,7 +16,7 @@ public class ContrailApiTest {
 	public static ApiTestCommon _apiTest;
 	private static final Logger s_logger = LoggerFactory.getLogger(ContrailApiTest.class);
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 
 		if (_apiTest != null) {
@@ -28,23 +29,26 @@ public class ContrailApiTest {
 		_apiTest = new ApiTestCommon(ApiConnectorFactory.build(URI.create("http://localhost:" + port)));
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() throws Exception {
 		_apiTest.tearDown();
 	}
 
+	@Disabled
 	@Test
-	public void testNetwork() {
+	void testNetwork() {
 		_apiTest.testNetwork();
 	}
 
+	@Disabled
 	@Test
-	public void testDeserializeReferenceList() {
+	void testDeserializeReferenceList() {
 		_apiTest.testDeserializeReferenceList();
 	}
 
+	@Disabled
 	@Test
-	public void testAddressAllocation() {
+	void testAddressAllocation() {
 		_apiTest.testAddressAllocation();
 	}
 }

@@ -3,10 +3,15 @@
  */
 package net.juniper.contrail.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -14,7 +19,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import junit.framework.TestCase;
 import net.juniper.contrail.api.types.IpamSubnetType;
 import net.juniper.contrail.api.types.NetworkIpam;
 import net.juniper.contrail.api.types.Project;
@@ -23,13 +27,13 @@ import net.juniper.contrail.api.types.VirtualMachineInterface;
 import net.juniper.contrail.api.types.VirtualNetwork;
 import net.juniper.contrail.api.types.VnSubnetsType;
 
-public class ObjectReferenceTest extends TestCase {
+public class ObjectReferenceTest {
 	/**
 	 * API server requires the attr element in an ObjectReference to be present,
 	 * even when null.
 	 */
 	@Test
-	public void testNullAttr() {
+	void testNullAttr() {
 		final VirtualMachineInterface vmi = new VirtualMachineInterface();
 		final VirtualNetwork vn = new VirtualNetwork();
 		vn.setName("testnet");
@@ -39,11 +43,11 @@ public class ObjectReferenceTest extends TestCase {
 		final Project project = new Project();
 		vmi.setParent(project);
 		final String jsdata = ApiSerializer.serializeObject("virtual-machine-interface", vmi, null, null);
-		assertNotSame(jsdata, -1, jsdata.indexOf("\"attr\":null"));
+		assertNotSame(-1, jsdata.indexOf("\"attr\":null"), jsdata);
 	}
 
 	@Test
-	public void testAttr() {
+	void testAttr() {
 		final VirtualNetwork vn = new VirtualNetwork();
 		vn.setName("testnet");
 		final NetworkIpam ipam = new NetworkIpam();
@@ -52,7 +56,7 @@ public class ObjectReferenceTest extends TestCase {
 		subnets.addIpamSubnets(new IpamSubnetType(new SubnetType("192.168.0.0", 24), "192.168.0.254", null, UUID.randomUUID().toString(), false, null, null, false, null, null, vn.getName() + "-subnet", 1));
 		vn.setNetworkIpam(ipam, subnets);
 		final String jsdata = ApiSerializer.serializeObject("virtual-network", vn, null, null);
-		assertNotSame(jsdata, -1, jsdata.indexOf("192.168.0.0"));
+		assertNotSame(-1, jsdata.indexOf("192.168.0.0"), jsdata);
 
 		final JsonParser parser = new JsonParser();
 		final JsonObject js_obj = parser.parse(jsdata).getAsJsonObject();
@@ -64,7 +68,7 @@ public class ObjectReferenceTest extends TestCase {
 	}
 
 	@Test
-	public void testVoidReference() {
+	void testVoidReference() {
 		final String voidref = "{\"network_policys\": [{\"to\": [\"default-domain\", \"testProject\", \"testPolicy\"], \"href\": \"http://localhost:53730/network-policy/4e4b0486-e56f-4bfe-8716-afc1a76ad106\", \"uuid\": \"4e4b0486-e56f-4bfe-8716-afc1a76ad106\"}]}";
 		final JsonParser parser = new JsonParser();
 		final JsonObject js_obj = parser.parse(voidref).getAsJsonObject();
@@ -77,12 +81,12 @@ public class ObjectReferenceTest extends TestCase {
 		assertEquals("testPolicy", result.getReferredName().get(2));
 	}
 
-	@Test
 	/**
 	 * API generator adds an "s" at the end of the children name. Thus
 	 * "network-policy" becomes "network-policys".
 	 */
-	public void testVoidAttrType() {
+	@Test
+	void testVoidAttrType() {
 		final String content = "{\"project\": {\"network_policys\": [{\"to\": [\"default-domain\", \"testProject\", \"testPolicy\"], \"href\": \"http://localhost:53730/network-policy/4e4b0486-e56f-4bfe-8716-afc1a76ad106\", \"uuid\": \"4e4b0486-e56f-4bfe-8716-afc1a76ad106\"}], \"fq_name\": [\"default-domain\", \"testProject\"], \"uuid\": \"7a6580ac-d7dc-4363-a342-47a473a32884\"}}";
 		final JsonParser parser = new JsonParser();
 		final JsonObject js_obj = parser.parse(content).getAsJsonObject();
@@ -93,7 +97,7 @@ public class ObjectReferenceTest extends TestCase {
 	}
 
 	@Test
-	public void testPort() {
+	void testPort() {
 		final Port port = new Port();
 		port.setName("Port1");
 		port.setId("VIF_UUID");

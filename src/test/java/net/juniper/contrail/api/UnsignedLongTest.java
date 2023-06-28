@@ -1,10 +1,12 @@
 package net.juniper.contrail.api;
 
 import com.google.gson.Gson;
-import org.junit.Test;
 import java.math.BigInteger;
 
-import static junit.framework.TestCase.*;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class UnsignedLongTest {
     private static class Subject {
@@ -12,7 +14,7 @@ public class UnsignedLongTest {
     }
 
     @Test
-    public void unsigned_longs_are_deserialized_as_overflowed_longs() {
+    void unsigned_longs_are_deserialized_as_overflowed_longs() {
         long overflow = 10L;
         BigInteger maxLong = BigInteger.valueOf(Long.MAX_VALUE);
         BigInteger unsignedValue = maxLong.add(BigInteger.valueOf(overflow));
@@ -25,7 +27,7 @@ public class UnsignedLongTest {
     }
 
     @Test
-    public void negative_longs_are_serialized_as_unsigned_longs() {
+    void negative_longs_are_serialized_as_unsigned_longs() {
         long overflow = 27;
         BigInteger maxLong = BigInteger.valueOf(Long.MAX_VALUE);
         BigInteger unsignedValue = maxLong.add(BigInteger.valueOf(overflow));
