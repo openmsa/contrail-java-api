@@ -34,7 +34,7 @@ public class ApiConnectorFactory {
 	/**
 	 * Create an ApiConnector object.
 	 *
-	 * @param hostname name or IP address of contrail VNC api server.
+	 * @param url name or IP address of contrail VNC api server.
 	 * @port api server port.
 	 * @return ApiConnector implementation.
 	 */
