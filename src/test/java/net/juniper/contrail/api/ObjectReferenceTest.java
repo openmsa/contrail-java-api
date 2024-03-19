@@ -27,7 +27,7 @@ import net.juniper.contrail.api.types.VirtualMachineInterface;
 import net.juniper.contrail.api.types.VirtualNetwork;
 import net.juniper.contrail.api.types.VnSubnetsType;
 
-public class ObjectReferenceTest {
+class ObjectReferenceTest {
 	/**
 	 * API server requires the attr element in an ObjectReference to be present,
 	 * even when null.

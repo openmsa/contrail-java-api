@@ -12,51 +12,57 @@ import java.net.URI;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLSession;
 
-import org.apache.http.ConnectionReuseStrategy;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.HttpVersion;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpDelete;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.client.protocol.RequestExpectContinue;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.DefaultBHttpClientConnection;
-import org.apache.http.impl.DefaultConnectionReuseStrategy;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.message.BasicHttpEntityEnclosingRequest;
-import org.apache.http.params.HttpParams;
-import org.apache.http.params.HttpProtocolParams;
-import org.apache.http.params.SyncBasicHttpParams;
-import org.apache.http.protocol.BasicHttpContext;
-import org.apache.http.protocol.BasicHttpProcessor;
-import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpCoreContext;
-import org.apache.http.protocol.HttpProcessor;
-import org.apache.http.protocol.HttpRequestExecutor;
-import org.apache.http.protocol.ImmutableHttpProcessor;
-import org.apache.http.protocol.RequestConnControl;
-import org.apache.http.protocol.RequestContent;
-import org.apache.http.protocol.RequestDate;
-import org.apache.http.protocol.RequestTargetHost;
-import org.apache.http.protocol.RequestUserAgent;
-import org.apache.http.ssl.SSLContexts;
-import org.apache.http.util.EntityUtils;
+import org.apache.hc.client5.http.classic.methods.HttpDelete;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.BasicHttpClientConnectionManager;
+import org.apache.hc.client5.http.protocol.RequestExpectContinue;
+import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
+import org.apache.hc.client5.http.socket.PlainConnectionSocketFactory;
+import org.apache.hc.client5.http.ssl.HttpClientHostnameVerifier;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.ConnectionReuseStrategy;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.HttpResponse;
+import org.apache.hc.core5.http.HttpStatus;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.config.Http1Config;
+import org.apache.hc.core5.http.config.Registry;
+import org.apache.hc.core5.http.config.RegistryBuilder;
+import org.apache.hc.core5.http.impl.DefaultConnectionReuseStrategy;
+import org.apache.hc.core5.http.impl.io.DefaultBHttpClientConnection;
+import org.apache.hc.core5.http.impl.io.HttpRequestExecutor;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.http.message.BasicClassicHttpRequest;
+import org.apache.hc.core5.http.protocol.BasicHttpContext;
+import org.apache.hc.core5.http.protocol.DefaultHttpProcessor;
+import org.apache.hc.core5.http.protocol.HttpContext;
+import org.apache.hc.core5.http.protocol.HttpProcessor;
+import org.apache.hc.core5.http.protocol.RequestConnControl;
+import org.apache.hc.core5.http.protocol.RequestContent;
+import org.apache.hc.core5.http.protocol.RequestDate;
+import org.apache.hc.core5.http.protocol.RequestTargetHost;
+import org.apache.hc.core5.http.protocol.RequestUserAgent;
+import org.apache.hc.core5.ssl.SSLContexts;
 import org.openstack4j.api.OSClient.OSClientV2;
 import org.openstack4j.api.OSClient.OSClientV3;
 import org.openstack4j.api.client.IOSClientBuilder.V3;
@@ -88,7 +94,6 @@ class ApiConnectorImpl implements ApiConnector {
 	private String authUrl;
 
 	// HTTP Connection parameters
-	private HttpParams _params;
 	private HttpProcessor httpProc;
 	private HttpRequestExecutor httpExecutor;
 	private HttpContext httpContext;
@@ -114,15 +119,9 @@ class ApiConnectorImpl implements ApiConnector {
 	}
 
 	private void initHttpClient() {
-		_params = new SyncBasicHttpParams();
-		HttpProtocolParams.setVersion(_params, HttpVersion.HTTP_1_1);
-		HttpProtocolParams.setContentCharset(_params, "UTF-8");
-		HttpProtocolParams.setUseExpectContinue(_params, false);
-		HttpProtocolParams.setHttpElementCharset(_params, "UTF-8");
-
-		httpProc = new ImmutableHttpProcessor(
+		httpProc = new DefaultHttpProcessor(
 				// Required protocol interceptors
-				new BasicHttpProcessor(),
+				// new BasicHttpProcessor(),
 				new RequestConnControl(),
 				new RequestContent(),
 				new RequestDate(),
@@ -132,14 +131,15 @@ class ApiConnectorImpl implements ApiConnector {
 				new RequestExpectContinue());
 		httpExecutor = new HttpRequestExecutor();
 		httpContext = new BasicHttpContext(null);
-		connection = new DefaultBHttpClientConnection(8192);
+		final Http1Config config = Http1Config.custom().setBufferSize(8192).build();
+		connection = new DefaultBHttpClientConnection(config);
 		connectionStrategy = new DefaultConnectionReuseStrategy();
 	}
 
 	private void initHttpServerParams(final String hostname, final int port) {
-		httpHost = new HttpHost(hostname, port, ssl ? "https" : "http");
-		httpContext.setAttribute(HttpCoreContext.HTTP_CONNECTION, connection);
-		httpContext.setAttribute(HttpCoreContext.HTTP_TARGET_HOST, httpHost);
+		httpHost = new HttpHost(ssl ? "https" : "http", hostname, port);
+//		httpContext.setAttribute(HttpCoreContext.HTTP_CONNECTION, connection);
+//		httpContext.setAttribute(HttpCoreContext.HTTP_TARGET_HOST, httpHost);
 	}
 
 	@Override
@@ -177,10 +177,9 @@ class ApiConnectorImpl implements ApiConnector {
 	}
 
 	private void checkResponseKeepAliveStatus(final HttpResponse response) throws IOException {
-
-		if (!connectionStrategy.keepAlive(response, httpContext)) {
-			connection.close();
-		}
+//		if (!connectionStrategy.keepAlive(req, response, httpContext)) {
+//			connection.close();
+//		}
 	}
 
 	private void checkConnection() throws IOException {
@@ -254,25 +253,29 @@ class ApiConnectorImpl implements ApiConnector {
 		return false;
 	}
 
-	private HttpResponse execute(final String method, final String uri, final StringEntity entity) throws IOException {
+	private ClassicHttpResponse execute(final String method, final String uri, final StringEntity entity) throws IOException {
 		return executeDoauth(method, uri, entity, MAX_RETRIES);
 	}
 
-	private HttpResponse executeDoauth(final String method, final String uri, final StringEntity entity,
+	private ClassicHttpResponse executeDoauth(final String method, final String uri, final StringEntity entity,
 			final int retryCount) throws IOException {
 		int rc = retryCount;
 		checkConnection();
 		if ((authToken == null) && (authType != null)) {
 			authenticate();
 		}
-		final BasicHttpEntityEnclosingRequest request = new BasicHttpEntityEnclosingRequest(method, uri);
+		final BasicClassicHttpRequest request = new BasicClassicHttpRequest(method, uri);
 		if (entity != null) {
 			request.setEntity(entity);
-			LOG.debug(">> Request: {}, {}, {}", method, request.getRequestLine().getUri(), EntityUtils.toString(entity));
+			try {
+				LOG.debug(">> Request: {}, {}, {}", method, request.getRequestUri(), EntityUtils.toString(entity));
+			} catch (ParseException | IOException e) {
+				LOG.error("", e);
+			}
 		} else {
-			LOG.debug(">> Request: {}, {}", method, request.getRequestLine().getUri());
+			LOG.debug(">> Request: {}, {}", method, request.getRequestUri());
 		}
-		request.setParams(_params);
+		// request.setParams(_params);
 		if (authToken != null) {
 			request.setHeader("X-AUTH-TOKEN", authToken);
 		}
@@ -281,7 +284,7 @@ class ApiConnectorImpl implements ApiConnector {
 			// Do not close it.
 			final CloseableHttpClient httpclient = createClient();
 			response = httpclient.execute(httpHost, request);
-			response.setParams(_params);
+			// response.setParams(_params);
 			httpExecutor.postProcess(response, httpProc, httpContext);
 		} catch (final Exception e) {
 			if (rc == 0) {
@@ -293,8 +296,8 @@ class ApiConnectorImpl implements ApiConnector {
 			return executeDoauth(method, uri, entity, rc);
 		}
 
-		LOG.debug("<< Response Status: {}", response.getStatusLine());
-		if (((response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED)
+		LOG.debug("<< Response Status: {}", response.getCode());
+		if (((response.getCode() == HttpStatus.SC_UNAUTHORIZED)
 				&& (rc > 0)) && authenticate()) {
 			getResponseData(response);
 			checkResponseKeepAliveStatus(response);
@@ -309,8 +312,23 @@ class ApiConnectorImpl implements ApiConnector {
 	private static CloseableHttpClient createClient() {
 		final HttpClientBuilder cli = HttpClients.custom();
 		final SSLContext sslContext = createSslContext();
-		cli.setSSLContext(sslContext)
-				.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+		final ConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext, new HttpClientHostnameVerifier() {
+			@Override
+			public boolean verify(final String hostname, final SSLSession session) {
+				return true;
+			}
+
+			@Override
+			public void verify(final String host, final X509Certificate cert) throws SSLException {
+				//
+			}
+		});
+		final Registry<ConnectionSocketFactory> socketFactoryRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
+				.register("https", sslsf)
+				.register("http", new PlainConnectionSocketFactory())
+				.build();
+		final BasicHttpClientConnectionManager connectionManager = new BasicHttpClientConnectionManager(socketFactoryRegistry);
+		cli.setConnectionManager(connectionManager);
 		return cli.build();
 	}
 
@@ -324,7 +342,7 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 	}
 
-	private static String getResponseData(final HttpResponse response) {
+	private static String getResponseData(final ClassicHttpResponse response) {
 		final HttpEntity entity = response.getEntity();
 		if (entity == null) {
 			return null;
@@ -392,17 +410,17 @@ class ApiConnectorImpl implements ApiConnector {
 	private Status draftOperation(final String action, final String scopeUuid) throws IOException {
 		final String jsdata = buildDraftActionJson(action, scopeUuid);
 
-		final HttpResponse response = execute(HttpPost.METHOD_NAME, "/security-policy-draft",
+		final ClassicHttpResponse response = execute(HttpPost.METHOD_NAME, "/security-policy-draft",
 				new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return noResponseStatus();
 		}
 
-		final int status = response.getStatusLine().getStatusCode();
+		final int status = response.getCode();
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
-			final String reason = response.getStatusLine().getReasonPhrase();
+			final String reason = response.getReasonPhrase();
 			LOG.warn("<< Response: {}", reason);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
@@ -428,7 +446,7 @@ class ApiConnectorImpl implements ApiConnector {
 		final String typename = ApiBuilder.getTypename(obj.getClass());
 		final String jsdata = ApiSerializer.serializeObject(typename, obj, projectName, domainName);
 
-		HttpResponse response;
+		ClassicHttpResponse response;
 		if (obj instanceof VRouterApiObjectBase) {
 			response = execute(HttpPost.METHOD_NAME, "/" + typename,
 					new StringEntity(jsdata, ContentType.APPLICATION_JSON));
@@ -438,15 +456,15 @@ class ApiConnectorImpl implements ApiConnector {
 					new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 		}
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return noResponseStatus();
 		}
-		final int status = response.getStatusLine().getStatusCode();
+		final int status = response.getCode();
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_CREATED)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
 
-			final String reason = response.getStatusLine().getReasonPhrase();
+			final String reason = response.getReasonPhrase();
 			LOG.error("create api request failed: {}", reason);
 			final String res = getResponseData(response);
 			LOG.error(FAILURE_MESSAGE, res);
@@ -483,17 +501,17 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 		final String typename = ApiBuilder.getTypename(obj.getClass());
 		final String jsdata = ApiSerializer.serializeObject(typename, obj, projectName, domainName);
-		final HttpResponse response = execute(HttpPut.METHOD_NAME, "/" + typename + '/' + obj.getUuid(),
+		final ClassicHttpResponse response = execute(HttpPut.METHOD_NAME, "/" + typename + '/' + obj.getUuid(),
 				new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return noResponseStatus();
 		}
 
-		final int status = response.getStatusLine().getStatusCode();
+		final int status = response.getCode();
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
-			final String reason = response.getStatusLine().getReasonPhrase();
+			final String reason = response.getReasonPhrase();
 			LOG.warn("<< Response: {}", reason);
 			checkResponseKeepAliveStatus(response);
 			return Status.failure(reason);
@@ -507,16 +525,16 @@ class ApiConnectorImpl implements ApiConnector {
 	@Override
 	public synchronized Status read(final ApiObjectBase obj) throws IOException {
 		final String typename = ApiBuilder.getTypename(obj.getClass());
-		final HttpResponse response = execute(HttpGet.METHOD_NAME,
+		final ClassicHttpResponse response = execute(HttpGet.METHOD_NAME,
 				"/" + typename + '/' + obj.getUuid(), null);
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return noResponseStatus();
 		}
 
-		final int status = response.getStatusLine().getStatusCode();
+		final int status = response.getCode();
 		if (status != HttpStatus.SC_OK) {
-			final String reason = response.getStatusLine().getReasonPhrase();
+			final String reason = response.getReasonPhrase();
 			LOG.warn("GET failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
 				LOG.error(FAILURE_MESSAGE, getResponseData(response));
@@ -550,18 +568,17 @@ class ApiConnectorImpl implements ApiConnector {
 		}
 
 		final String typename = ApiBuilder.getTypename(cls);
-		final HttpResponse response = execute(HttpDelete.METHOD_NAME,
-				"/" + typename + '/' + uuid, null);
+		final ClassicHttpResponse response = execute(HttpDelete.METHOD_NAME, "/" + typename + '/' + uuid, null);
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return Status.failure("No response from API server.");
 		}
 
-		final int status = response.getStatusLine().getStatusCode();
+		final int status = response.getCode();
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_NO_CONTENT)
 				&& (status != HttpStatus.SC_ACCEPTED)) {
-			final String reason = response.getStatusLine().getReasonPhrase();
+			final String reason = response.getReasonPhrase();
 			LOG.warn("Delete failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
 				LOG.error(FAILURE_MESSAGE, getResponseData(response));
@@ -596,14 +613,14 @@ class ApiConnectorImpl implements ApiConnector {
 	@Override
 	public synchronized ApiObjectBase findById(final Class<? extends ApiObjectBase> cls, final String uuid) throws IOException {
 		final String typename = ApiBuilder.getTypename(cls);
-		final HttpResponse response = execute(HttpGet.METHOD_NAME,
+		final ClassicHttpResponse response = execute(HttpGet.METHOD_NAME,
 				'/' + typename + '/' + uuid, null);
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return null;
 		}
 
-		if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+		if (response.getCode() != HttpStatus.SC_OK) {
 			EntityUtils.consumeQuietly(response.getEntity());
 			checkResponseKeepAliveStatus(response);
 			return null;
@@ -640,14 +657,14 @@ class ApiConnectorImpl implements ApiConnector {
 	// body: {"type": class, "fq_name": [parent..., name]}
 	public synchronized String findByName(final Class<? extends ApiObjectBase> cls, final List<String> name_list) throws IOException {
 		final String jsonStr = ApiBuilder.buildFqnJsonString(cls, name_list);
-		final HttpResponse response = execute(HttpPost.METHOD_NAME, "/fqname-to-id",
+		final ClassicHttpResponse response = execute(HttpPost.METHOD_NAME, "/fqname-to-id",
 				new StringEntity(jsonStr, ContentType.APPLICATION_JSON));
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return null;
 		}
 
-		if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+		if (response.getCode() != HttpStatus.SC_OK) {
 			EntityUtils.consumeQuietly(response.getEntity());
 			checkResponseKeepAliveStatus(response);
 			return null;
@@ -673,14 +690,14 @@ class ApiConnectorImpl implements ApiConnector {
 	@Override
 	public synchronized List<? extends ApiObjectBase> list(final Class<? extends ApiObjectBase> cls, final List<String> parent) throws IOException {
 		final String typename = ApiBuilder.getTypename(cls);
-		final HttpResponse response = execute(HttpGet.METHOD_NAME, '/' + typename + 's', null);
+		final ClassicHttpResponse response = execute(HttpGet.METHOD_NAME, '/' + typename + 's', null);
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		if ((response == null)) {
 			return null;
 		}
 
-		if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			LOG.warn("list failed with : {}", response.getStatusLine().getReasonPhrase());
+		if (response.getCode() != HttpStatus.SC_OK) {
+			LOG.warn("list failed with : {}", response.getReasonPhrase());
 			EntityUtils.consumeQuietly(response.getEntity());
 			checkResponseKeepAliveStatus(response);
 			return null;
@@ -716,21 +733,19 @@ class ApiConnectorImpl implements ApiConnector {
 
 	@Override
 	public Status sync(final String uri) throws IOException {
-		HttpResponse response;
-		final String jsdata = "{\"type\":" + clientId + "}";
-		response = execute(HttpPost.METHOD_NAME, uri,
-				new StringEntity(jsdata, ContentType.APPLICATION_JSON));
 
-		if ((response == null) || (response.getStatusLine() == null)) {
+		final String jsdata = "{\"type\":" + clientId + "}";
+		final ClassicHttpResponse response = execute(HttpPost.METHOD_NAME, uri, new StringEntity(jsdata, ContentType.APPLICATION_JSON));
+		if ((response == null)) {
 			return noResponseStatus();
 		}
 
-		final int status = response.getStatusLine().getStatusCode();
+		final int status = response.getCode();
 		if ((status != HttpStatus.SC_OK)
 				&& (status != HttpStatus.SC_CREATED)
 				&& (status != HttpStatus.SC_ACCEPTED)
 				&& (status != HttpStatus.SC_NO_CONTENT)) {
-			final String reason = response.getStatusLine().getReasonPhrase();
+			final String reason = response.getReasonPhrase();
 			LOG.error("sync request failed: {}", reason);
 			if (status != HttpStatus.SC_NOT_FOUND) {
 				LOG.error(FAILURE_MESSAGE, getResponseData(response));
