@@ -1,7 +1,7 @@
 package net.juniper.contrail.api;
 
 import java.util.List;
-import com.google.common.collect.Lists;
+
 import com.google.gson.annotations.SerializedName;
 
 @SuppressWarnings("serial")
@@ -20,7 +20,7 @@ public class DisablePort  extends VRouterApiObjectBase  {
 
     @Override
     public List<String> getDefaultParent() {
-        return Lists.newArrayList("default-domain", "default-project");
+        return List.of("default-domain", "default-project");
     }
 
     @Override

@@ -13,6 +13,8 @@ import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import javax.net.ssl.SSLContext;
@@ -66,7 +68,6 @@ import org.openstack4j.openstack.OSFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonObject;
 
 @SuppressWarnings("deprecation")
@@ -584,7 +585,7 @@ class ApiConnectorImpl implements ApiConnector {
 
 	@Override
 	public ApiObjectBase findByFQN(final Class<? extends ApiObjectBase> cls, final String fullName) throws IOException {
-		final List<String> fqn = ImmutableList.copyOf(fullName.split(":"));
+		final List<String> fqn = Collections.unmodifiableList(Arrays.asList(fullName.split(":")));
 		final String uuid = findByName(cls, fqn);
 		if (uuid == null) {
 			return null;

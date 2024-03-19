@@ -21,8 +21,6 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.net.InetAddresses;
-
 import net.juniper.contrail.api.types.Domain;
 import net.juniper.contrail.api.types.FloatingIp;
 import net.juniper.contrail.api.types.FloatingIpPool;
@@ -71,15 +69,14 @@ public class ApiConnectorMock implements ApiConnector {
 
 			final MacAddressesType macs = new MacAddressesType();
 			macs.addMacAddress(addr);
-			s_logger.debug("Assigned auto property mac address : " + addr);
+			s_logger.debug("Assigned auto property mac address : {}", addr);
 			((VirtualMachineInterface) obj).setMacAddresses(macs);
 		} else if (obj.getClass() == InstanceIp.class) {
 			if (((InstanceIp) obj).getAddress() != null) {
 				return;
 			}
-			final Random random = new Random();
-			final String ipString = InetAddresses.fromInteger(random.nextInt()).getHostAddress();
-			s_logger.debug("Assigned auto property ip address : " + ipString);
+			final String ipString = "1.2.3.4";
+			s_logger.debug("Assigned auto property ip address : {}", ipString);
 			((InstanceIp) obj).setAddress(ipString);
 		}
 	}
